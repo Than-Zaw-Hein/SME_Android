@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">SME</string>
+    <string name="search_hint">Search something</string>
+    <string name="all_menu">All Menu</string>
+    <string name="snack">Snack</string>
+    <string name="food">Food</string>
+    <string name="drink">Drink</string>
+    <string name="todays_special_menu">Today\'s Special Menu</string>
+    <string name="items_selected">%1$d items selected</string>
+    <string name="additional_transaction">Additional Transaction</string>
+    <string name="product_name">Product Name</string>
+    <string name="product_code">Product Code</string>
+    <string name="base_price">Base Price</string>
+    <string name="sale_price">Sale Price</string>
+    <string name="amount">Amount</string>
+    <string name="done">Done</string>
+    <string name="cancel">Cancel</string>
+    <string name="select_discount">Select Discount</string>
+    <string name="enter_the_discount">Enter the discount</string>
+    <string name="discount_name">Discount Name</string>
+    <string name="discount">Discount</string>
+    <string name="available_discount">Available Discount</string>
+    <string name="set">Set</string>
+    <string name="remaining">%1$d Remaining</string>
+</resources>
