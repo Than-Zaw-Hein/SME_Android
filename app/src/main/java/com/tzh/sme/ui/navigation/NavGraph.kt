@@ -1,5 +1,7 @@
 package com.tzh.sme.ui.navigation
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -25,14 +27,22 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 sealed interface Screen {
-    @Serializable object Login : Screen
-    @Serializable object Signup : Screen
-    @Serializable object POS : Screen
-    @Serializable object Stock : Screen
-    @Serializable object History : Screen
-    @Serializable object Checkout : Screen
-    @Serializable object AddProduct : Screen
-    @Serializable data class EditProduct(val productId: Long) : Screen
+    @Serializable
+    object Login : Screen
+    @Serializable
+    object Signup : Screen
+    @Serializable
+    object POS : Screen
+    @Serializable
+    object Stock : Screen
+    @Serializable
+    object History : Screen
+    @Serializable
+    object Checkout : Screen
+    @Serializable
+    object AddProduct : Screen
+    @Serializable
+    data class EditProduct(val productId: Long) : Screen
 }
 
 @Composable
