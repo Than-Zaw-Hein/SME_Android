@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "527416293780",
+    "project_id": "smeandorid",
+    "storage_bucket": "smeandorid.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:527416293780:android:663cf1ca1baf5a60143781",
+        "android_client_info": {
+          "package_name": "com.tzh.sme"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "527416293780-7eqln2bqd0dgs071nc9vh953ru9gil4e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tzh.sme",
+            "certificate_hash": "86dd1cb98657699c930951093ccc57a918e34fb1"
+          }
+        },
+        {
+          "client_id": "527416293780-l1o2su0di0nt89544i4mvqhood43tkeq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBb03x2hROqR4ajsWlR1ezZi2fJSK-3kRE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "527416293780-l1o2su0di0nt89544i4mvqhood43tkeq.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -9,7 +9,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.tzh.sme.R
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -29,7 +31,7 @@ fun HistoryContent(
     val dateFormatter = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Transaction History") }) }
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.history_title)) }) }
     ) { padding ->
         when (uiState) {
             is HistoryUiState.Loading -> {

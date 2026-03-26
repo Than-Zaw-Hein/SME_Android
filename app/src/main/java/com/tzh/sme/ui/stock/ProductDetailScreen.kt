@@ -20,10 +20,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
+import com.tzh.sme.R
 import com.tzh.sme.ui.inventory.BarcodeScannerView
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,16 +67,27 @@ fun ProductDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (uiState.isEditMode) "Edit Product" else "Add New Product") },
+                title = { 
+                    Text(
+                        if (uiState.isEditMode) stringResource(R.string.edit_product) 
+                        else stringResource(R.string.add_new_product)
+                    ) 
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack, 
+                            contentDescription = stringResource(R.string.back)
+                        )
                     }
                 },
                 actions = {
                     if (uiState.isEditMode) {
                         IconButton(onClick = { viewModel.onEvent(ProductDetailEvent.DeleteProduct) }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete Product")
+                            Icon(
+                                Icons.Default.Delete, 
+                                contentDescription = stringResource(R.string.delete_product)
+                            )
                         }
                     }
                 }
@@ -91,7 +104,7 @@ fun ProductDetailScreen(
                     onClick = { viewModel.onEvent(ProductDetailEvent.ToggleScanner(false)) },
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp)
                 ) {
-                    Text("Close Scanner")
+                    Text(stringResource(R.string.close_scanner))
                 }
             }
         } else {
@@ -103,7 +116,10 @@ fun ProductDetailScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Product Images (Max 3)", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(R.string.product_images_max), 
+                    style = MaterialTheme.typography.titleSmall
+                )
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth().height(100.dp)
@@ -122,7 +138,7 @@ fun ProductDetailScreen(
                             ) {
                                 Icon(
                                     Icons.Default.Close,
-                                    contentDescription = "Remove",
+                                    contentDescription = stringResource(R.string.remove),
                                     tint = MaterialTheme.colorScheme.error
                                 )
                             }
@@ -135,7 +151,10 @@ fun ProductDetailScreen(
                                 modifier = Modifier.size(100.dp)
                             ) {
                                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.AddAPhoto, contentDescription = "Add Photo")
+                                    Icon(
+                                        Icons.Default.AddAPhoto, 
+                                        contentDescription = stringResource(R.string.add_photo)
+                                    )
                                 }
                             }
                         }
@@ -145,7 +164,7 @@ fun ProductDetailScreen(
                 OutlinedTextField(
                     value = uiState.barcode,
                     onValueChange = { viewModel.onEvent(ProductDetailEvent.BarcodeChanged(it)) },
-                    label = { Text("Barcode") },
+                    label = { Text(stringResource(R.string.barcode)) },
                     modifier = Modifier.fillMaxWidth(),
                     trailingIcon = {
                         IconButton(onClick = {
@@ -158,7 +177,10 @@ fun ProductDetailScreen(
                                 permissionLauncher.launch(Manifest.permission.CAMERA)
                             }
                         }) {
-                            Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan Barcode")
+                            Icon(
+                                Icons.Default.QrCodeScanner, 
+                                contentDescription = stringResource(R.string.scan_barcode)
+                            )
                         }
                     }
                 )
@@ -166,7 +188,7 @@ fun ProductDetailScreen(
                 OutlinedTextField(
                     value = uiState.name,
                     onValueChange = { viewModel.onEvent(ProductDetailEvent.NameChanged(it)) },
-                    label = { Text("Product Name") },
+                    label = { Text(stringResource(R.string.product_name)) },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -179,7 +201,7 @@ fun ProductDetailScreen(
                 OutlinedTextField(
                     value = uiState.price,
                     onValueChange = { viewModel.onEvent(ProductDetailEvent.PriceChanged(it)) },
-                    label = { Text("Price") },
+                    label = { Text(stringResource(R.string.price)) },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
@@ -192,7 +214,12 @@ fun ProductDetailScreen(
                     OutlinedTextField(
                         value = uiState.quantity,
                         onValueChange = { viewModel.onEvent(ProductDetailEvent.QuantityChanged(it)) },
-                        label = { Text(if (uiState.isEditMode) "Quantity" else "Initial Quantity") },
+                        label = { 
+                            Text(
+                                if (uiState.isEditMode) stringResource(R.string.quantity) 
+                                else stringResource(R.string.initial_quantity)
+                            ) 
+                        },
                         modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
@@ -201,14 +228,14 @@ fun ProductDetailScreen(
                         val current = uiState.quantity.toIntOrNull() ?: 0
                         if (current > 0) viewModel.onEvent(ProductDetailEvent.QuantityChanged((current - 1).toString()))
                     }) {
-                        Icon(Icons.Default.Remove, contentDescription = "Decrement")
+                        Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.decrement))
                     }
                     
                     IconButton(onClick = {
                         val current = uiState.quantity.toIntOrNull() ?: 0
                         viewModel.onEvent(ProductDetailEvent.QuantityChanged((current + 1).toString()))
                     }) {
-                        Icon(Icons.Default.Add, contentDescription = "Increment")
+                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.increment))
                     }
                 }
 
@@ -222,7 +249,10 @@ fun ProductDetailScreen(
                     if (uiState.isSaving) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
                     } else {
-                        Text(if (uiState.isEditMode) "Update Product" else "Add Product")
+                        Text(
+                            if (uiState.isEditMode) stringResource(R.string.update_product) 
+                            else stringResource(R.string.add_product)
+                        )
                     }
                 }
             }
@@ -244,12 +274,12 @@ fun CategoryDropdown(
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
-            title = { Text("New Category") },
+            title = { Text(stringResource(R.string.new_category)) },
             text = {
                 OutlinedTextField(
                     value = newCategoryName,
                     onValueChange = { newCategoryName = it },
-                    label = { Text("Category Name") },
+                    label = { Text(stringResource(R.string.category_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -264,12 +294,12 @@ fun CategoryDropdown(
                         }
                     }
                 ) {
-                    Text("Add")
+                    Text(stringResource(R.string.add))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -284,7 +314,7 @@ fun CategoryDropdown(
             value = selectedCategory,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Category") },
+            label = { Text(stringResource(R.string.category)) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true).fillMaxWidth()
@@ -309,7 +339,7 @@ fun CategoryDropdown(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Add New Category")
+                        Text(stringResource(R.string.add_new_category))
                     }
                 },
                 onClick = {

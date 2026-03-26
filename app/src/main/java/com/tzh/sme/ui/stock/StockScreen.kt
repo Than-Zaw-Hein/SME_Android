@@ -9,7 +9,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.tzh.sme.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -21,10 +23,10 @@ fun StockScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Stock Management") }) },
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.stock_management)) }) },
         floatingActionButton = {
             FloatingActionButton(onClick = onNavigateToAddProduct) {
-                Icon(Icons.Default.Add, contentDescription = "Add Product")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_product))
             }
         }
     ) { padding ->
@@ -57,7 +59,7 @@ fun StockScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text("Qty: ${product.quantity}")
+                                        Text(stringResource(R.string.qty_label, product.quantity))
                                         Text(
                                             "$${product.price}",
                                             color = MaterialTheme.colorScheme.primary

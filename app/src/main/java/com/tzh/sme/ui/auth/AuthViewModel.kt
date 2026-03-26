@@ -30,10 +30,23 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun signInWithGoogle(onLoginSuccess: () -> Unit) {
+    fun signUp(name: String, phone: String, address: String, email: String, pass: String, onSignUpSuccess: () -> Unit) {
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
-            val result = authRepository.signInWithGoogle()
+            val result = authRepository.signUpWithEmail(name, phone, address, email, pass)
+            if (result.isSuccess) {
+                _uiState.value = AuthUiState.Success("Account Created Successfully")
+                onSignUpSuccess()
+            } else {
+                _uiState.value = AuthUiState.Error(result.exceptionOrNull()?.message ?: "Signup Failed")
+            }
+        }
+    }
+
+    fun signInWithGoogle(idToken: String, onLoginSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _uiState.value = AuthUiState.Loading
+            val result = authRepository.signInWithGoogle(idToken)
             if (result.isSuccess) {
                 _uiState.value = AuthUiState.Success("Login Successful")
                 onLoginSuccess()

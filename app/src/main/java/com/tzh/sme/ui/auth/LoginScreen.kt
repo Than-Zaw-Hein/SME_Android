@@ -1,60 +1,72 @@
 package com.tzh.sme.ui.auth
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.tzh.sme.R
 
 @Composable
 fun LoginScreen(
     viewModel: AuthViewModel,
-    onLoginSuccess: () -> Unit
+    onLoginSuccess: () -> Unit,
+    onNavigateToSignup: () -> Unit
 ) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("mgmg@email.com") }
+    var password by remember { mutableStateOf("Password") }
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
-    Scaffold() { innerPadding ->
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+        onResult = { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                try {
+                    val account = task.getResult(ApiException::class.java)
+                    account.idToken?.let { token ->
+                        viewModel.signInWithGoogle(token, onLoginSuccess)
+                    }
+                } catch (e: ApiException) {
+                    // Handle error
+                }
+            }
+        }
+    )
+
+    Scaffold { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp)
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text("Welcome to SME", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                text = stringResource(R.string.welcome_to_sme),
+                style = MaterialTheme.typography.headlineMedium
+            )
             Spacer(Modifier.height(32.dp))
 
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("Email") },
+                label = { Text(stringResource(R.string.email)) },
                 leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -64,7 +76,7 @@ fun LoginScreen(
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Password") },
+                label = { Text(stringResource(R.string.password)) },
                 leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
@@ -80,17 +92,30 @@ fun LoginScreen(
                 if (uiState is AuthUiState.Loading) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp))
                 } else {
-                    Text("Login")
+                    Text(stringResource(R.string.login))
                 }
             }
 
             Spacer(Modifier.height(16.dp))
 
             OutlinedButton(
-                onClick = { viewModel.signInWithGoogle(onLoginSuccess) },
+                onClick = {
+                    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                        .requestIdToken(context.getString(R.string.default_web_client_id)) // This needs to be in strings.xml from google-services.json
+                        .requestEmail()
+                        .build()
+                    val googleSignInClient = GoogleSignIn.getClient(context, gso)
+                    googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Sign in with Google")
+                Text(stringResource(R.string.sign_in_with_google))
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            TextButton(onClick = onNavigateToSignup) {
+                Text(stringResource(R.string.dont_have_account))
             }
 
             if (uiState is AuthUiState.Error) {

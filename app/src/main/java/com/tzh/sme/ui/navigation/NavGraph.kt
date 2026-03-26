@@ -11,6 +11,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.tzh.sme.ui.auth.AuthViewModel
 import com.tzh.sme.ui.auth.LoginScreen
+import com.tzh.sme.ui.auth.SignupScreen
 import com.tzh.sme.ui.history.HistoryScreen
 import com.tzh.sme.ui.history.HistoryViewModel
 import com.tzh.sme.ui.pos.CheckOutScreen
@@ -25,6 +26,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed interface Screen {
     @Serializable object Login : Screen
+    @Serializable object Signup : Screen
     @Serializable object POS : Screen
     @Serializable object Stock : Screen
     @Serializable object History : Screen
@@ -53,6 +55,23 @@ fun NavGraph(
                     navController.navigate(Screen.POS) {
                         popUpTo(Screen.Login) { inclusive = true }
                     }
+                },
+                onNavigateToSignup = {
+                    navController.navigate(Screen.Signup)
+                }
+            )
+        }
+        composable<Screen.Signup> {
+            val viewModel: AuthViewModel = hiltViewModel()
+            SignupScreen(
+                viewModel = viewModel,
+                onSignupSuccess = {
+                    navController.navigate(Screen.POS) {
+                        popUpTo(Screen.Login) { inclusive = true }
+                    }
+                },
+                onNavigateToLogin = {
+                    navController.popBackStack()
                 }
             )
         }

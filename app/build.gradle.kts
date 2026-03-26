@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     kotlin("plugin.serialization") version "2.0.21"
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -85,12 +86,29 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
 
+    // Coil
+    implementation(libs.coil.compose)
+
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.play.services.auth)
 
     // Apache POI (Excel)
     implementation(libs.poi)
     implementation(libs.poi.ooxml)
-    // col
-    implementation(libs.coil.compose)
+    
+//    // Concurrent & Guava
+//    implementation(libs.guava.listenablefuture)
+//    implementation(libs.androidx.concurrent.futures)
+    // Standard Guava/ListenableFuture support
+    implementation("com.google.guava:guava:33.0.0-android")
+
+    // Better way: Kotlin Coroutines support for ListenableFuture
+    implementation("androidx.concurrent:concurrent-futures-ktx:1.2.0")
+
+
     // test
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

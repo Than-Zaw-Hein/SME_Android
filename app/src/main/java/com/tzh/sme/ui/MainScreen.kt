@@ -15,17 +15,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.tzh.sme.R
 import com.tzh.sme.ui.navigation.NavGraph
 import com.tzh.sme.ui.navigation.Screen as NavScreen
 
-enum class MainTab(val label: String, val icon: @Composable () -> Unit, val route: Any) {
-    POS("POS", { Icon(Icons.Default.PointOfSale, contentDescription = null) }, NavScreen.POS),
-    Stock("Stock", { Icon(Icons.Default.Inventory, contentDescription = null) }, NavScreen.Stock),
-    History("History", { Icon(Icons.Default.History, contentDescription = null) }, NavScreen.History)
+enum class MainTab(val labelRes: Int, val icon: @Composable () -> Unit, val route: Any) {
+    POS(R.string.nav_pos, { Icon(Icons.Default.PointOfSale, contentDescription = null) }, NavScreen.POS),
+    Stock(R.string.nav_stock, { Icon(Icons.Default.Inventory, contentDescription = null) }, NavScreen.Stock),
+    History(R.string.nav_history, { Icon(Icons.Default.History, contentDescription = null) }, NavScreen.History)
 }
 
 @Composable
@@ -65,7 +67,7 @@ fun MainScreen(windowWidthSizeClass: WindowWidthSizeClass) {
                                 }
                             },
                             icon = tab.icon,
-                            label = { Text(tab.label) }
+                            label = { Text(stringResource(tab.labelRes)) }
                         )
                     }
                 }
