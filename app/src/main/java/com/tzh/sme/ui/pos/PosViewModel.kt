@@ -77,7 +77,10 @@ class PosViewModel @Inject constructor(
 
     fun onBarcodeScanned(barcode: String) {
         viewModelScope.launch {
-            val product = repository.getProductByBarcode(barcode)
+            if (uiState.value !is PosUiState.Success) return@launch
+
+            val product =
+                (uiState.value as PosUiState.Success).products.find { it.barcode == barcode }
             if (product != null) {
                 addToCart(product)
             }
@@ -88,6 +91,8 @@ class PosViewModel @Inject constructor(
         val currentCart = _cart.value.toMutableList()
         val index = currentCart.indexOfFirst { it.product.id == product.id }
         if (index != -1) {
+            val maxQuantity = product.quantity
+            if (currentCart[index].quantity >= maxQuantity) return
             currentCart[index] = currentCart[index].copy(quantity = currentCart[index].quantity + 1)
         } else {
             currentCart.add(CartItem(product, 1))

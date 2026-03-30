@@ -27,13 +27,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,7 +54,8 @@ import com.tzh.sme.ui.theme.SMETheme
 fun PosScreen(
     viewModel: PosViewModel,
     windowWidthSizeClass: WindowWidthSizeClass,
-    onNavigateToCheckout: () -> Unit
+    onNavigateToCheckout: () -> Unit,
+    onProductDetail: (Long) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -64,7 +68,8 @@ fun PosScreen(
         onAddToCart = viewModel::addToCart,
         onRemoveFromCart = viewModel::removeFromCart,
         onCheckout = viewModel::checkout,
-        onNavigateToCheckout = onNavigateToCheckout
+        onNavigateToCheckout = onNavigateToCheckout,
+        onProductDetail = onProductDetail
     )
 }
 
@@ -79,7 +84,8 @@ fun PosContent(
     onAddToCart: (ProductEntity) -> Unit,
     onRemoveFromCart: (ProductEntity) -> Unit,
     onCheckout: () -> Unit,
-    onNavigateToCheckout: () -> Unit
+    onNavigateToCheckout: () -> Unit,
+    onProductDetail: (Long) -> Unit
 ) {
     var showScanner by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -107,7 +113,7 @@ fun PosContent(
                         Icon(
                             Icons.Default.LocationOn,
                             contentDescription = null,
-                            tint = Color(0xFFE96145),
+                            tint = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(4.dp))
@@ -117,14 +123,9 @@ fun PosContent(
                             } else {
                                 "Unknown"
                             },
-                            color = Color(0xFFE96145),
+                            color = MaterialTheme.colorScheme.secondary,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 14.sp
-                        )
-                        Icon(
-                            Icons.Default.KeyboardArrowDown,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
                         )
                     }
                     IconButton(onClick = { /* Settings */ }) {
@@ -170,7 +171,12 @@ fun PosContent(
         ) {
             when (uiState) {
                 is PosUiState.Loading -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
+                        contentAlignment = Alignment.Center
+                    ) {
                         CircularProgressIndicator()
                     }
                 }
@@ -184,7 +190,9 @@ fun PosContent(
                         )
 
                         ProductGrid(
-                            products = uiState.products, onAddToCart = onAddToCart
+                            products = uiState.products,
+                            onAddToCart = onAddToCart,
+                            onProductDetail = onProductDetail
                         )
                     }
 
@@ -245,42 +253,48 @@ fun CategoryList(
     ) {
         items(categories) { category ->
             val isSelected = category == selectedCategory
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable { onCategorySelect(category) }) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = if (isSelected) Color(0xFFE96145) else Color.Transparent
-                    ),
-                    modifier = Modifier.size(56.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        // Using icons based on name (mock)
-                        val icon = when (category.lowercase()) {
-                            "snack" -> Icons.Default.Fastfood
-                            "food" -> Icons.Default.Restaurant
-                            "drink" -> Icons.Default.LocalDrink
-                            "fruits" -> Icons.Default.BakeryDining
-                            else -> Icons.Default.AllInclusive
-                        }
-                        Icon(
-                            icon,
-                            contentDescription = null,
-                            tint = if (isSelected) Color(0xFFE96145) else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = category,
-                    fontSize = 12.sp,
-                    color = if (isSelected) Color(0xFFE96145) else MaterialTheme.colorScheme.onSurface,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+            Card(
+                onClick = { onCategorySelect(category) }, colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
                 )
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(4.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (isSelected) MaterialTheme.colorScheme.secondary else Color.Transparent
+                        ),
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            // Using icons based on name (mock)
+                            val icon = when (category.lowercase()) {
+                                "snack" -> Icons.Default.Fastfood
+                                "food" -> Icons.Default.Restaurant
+                                "drink" -> Icons.Default.LocalDrink
+                                "fruits" -> Icons.Default.BakeryDining
+                                else -> Icons.Default.AllInclusive
+                            }
+                            Icon(
+                                icon,
+                                contentDescription = null,
+                                tint = if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = category,
+                        fontSize = 12.sp,
+                        color = if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
             }
         }
     }
@@ -288,7 +302,8 @@ fun CategoryList(
 
 @Composable
 fun ProductGrid(
-    products: List<ProductEntity>, onAddToCart: (ProductEntity) -> Unit
+    products: List<ProductEntity>, onAddToCart: (ProductEntity) -> Unit,
+    onProductDetail: (Long) -> Unit,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -297,19 +312,22 @@ fun ProductGrid(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         items(products) { product ->
-            ProductCard(product = product, onAddToCart = { onAddToCart(product) })
+            ProductCard(
+                product = product, onAddToCart = { onAddToCart(product) },
+                onDetail = { onProductDetail(it) })
         }
     }
 }
 
 @Composable
-fun ProductCard(product: ProductEntity, onAddToCart: () -> Unit) {
+fun ProductCard(product: ProductEntity, onAddToCart: () -> Unit, onDetail: (Long) -> Unit) {
     Card(
         shape = RoundedCornerShape(24.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        onClick = { onDetail(product.id) },
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onAddToCart() }) {
+    ) {
         Column(
             modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -317,8 +335,7 @@ fun ProductCard(product: ProductEntity, onAddToCart: () -> Unit) {
                 modifier = Modifier
                     .aspectRatio(1f)
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFFF9F9F9)), contentAlignment = Alignment.Center
+                    .clip(RoundedCornerShape(20.dp)), contentAlignment = Alignment.Center
             ) {
 
                 product.imagePaths.firstOrNull()?.let {
@@ -334,20 +351,20 @@ fun ProductCard(product: ProductEntity, onAddToCart: () -> Unit) {
                     painter = painterResource(R.drawable.placeholder),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
+                    contentScale = ContentScale.Fit,
                 )
                 // Discount Badge
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFFFDE8E4),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 10.dp)
+                        .padding(top = 4.dp)
                 ) {
                     Text(
                         text = "-10%",
                         fontSize = 10.sp,
-                        color = Color(0xFFE96145),
+                        color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
@@ -381,7 +398,7 @@ fun ProductCard(product: ProductEntity, onAddToCart: () -> Unit) {
                 Text(
                     text = "$",
                     fontSize = 12.sp,
-                    color = Color(0xFFE96145),
+                    color = MaterialTheme.colorScheme.secondary,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
@@ -389,7 +406,23 @@ fun ProductCard(product: ProductEntity, onAddToCart: () -> Unit) {
                     style = MaterialTheme.typography.titleSmall.copy(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     ),
+                    modifier = Modifier.weight(0.7f),
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 1
                 )
+                Spacer(Modifier.width(8.dp))
+                IconButton(
+                    onClick = onAddToCart,
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.ShoppingCart,
+                        contentDescription = null
+                    )
+                }
             }
         }
     }
@@ -423,7 +456,7 @@ fun CartPopup(
         // Glass surface with border and content
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = Color.DarkGray.copy(alpha = 0.7f), // Semi-transparent dark background
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), // Semi-transparent dark background
             shape = RoundedCornerShape(32.dp),
             shadowElevation = 0.dp
         ) {
@@ -446,27 +479,27 @@ fun CartPopup(
                 ) {
                     Text(
                         text = stringResource(R.string.items_selected, itemCount),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.surface,
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(Modifier.weight(1f))
                     Text(
                         text = "$${String.format("%.2f", totalPrice)}",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.surface,
                         fontWeight = FontWeight.Bold,
                         fontSize = 17.sp
                     )
                     Spacer(Modifier.width(16.dp))
                     Surface(
                         shape = CircleShape,
-                        color = Color(0xFFE96145),
+                        color = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(44.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Default.ShoppingBasket,
                                 contentDescription = null,
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.surface,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -481,12 +514,12 @@ fun CartPopup(
 @Composable
 fun PosScreenPreview() {
     val sampleProducts = listOf(
-        ProductEntity(1, "123", "Noodles Ramen", "Spicy", 5.35, 10, "Food"),
+        ProductEntity(1, "1230000", "Noodles Ramen", "Spicy", 53000000.0, 10, "Food"),
         ProductEntity(2, "456", "Dumplings", "Beef", 3.27, 20, "Food"),
         ProductEntity(3, "789", "Beef Burger", "Cheese", 6.50, 15, "Food"),
         ProductEntity(4, "012", "Pizza Sicilia", "Large", 9.66, 5, "Food")
     )
-    SMETheme {
+    SMETheme(darkTheme = true) {
         PosContent(
             uiState = PosUiState.Success(
                 products = sampleProducts,
@@ -510,6 +543,6 @@ fun PosScreenPreview() {
             onAddToCart = {},
             onRemoveFromCart = {},
             onCheckout = {},
-            onNavigateToCheckout = {})
+            onNavigateToCheckout = {}, onProductDetail = {})
     }
 }

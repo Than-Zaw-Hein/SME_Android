@@ -7,6 +7,7 @@ import com.tzh.sme.data.local.entities.CategoryEntity
 import com.tzh.sme.data.local.entities.ProductEntity
 import com.tzh.sme.domain.repository.StockRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,9 +50,10 @@ class ProductDetailViewModel @Inject constructor(
     private fun loadProduct(id: Long) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, isEditMode = true) }
+            delay(1000)
             val product = repository.getProductById(id)
             if (product != null) {
-                _uiState.update { 
+                _uiState.update {
                     it.copy(
                         id = product.id,
                         barcode = product.barcode,
@@ -79,6 +81,7 @@ class ProductDetailViewModel @Inject constructor(
                     _uiState.update { it.copy(quantity = event.quantity) }
                 }
             }
+
             is ProductDetailEvent.CategoryChanged -> {
                 _uiState.update { it.copy(category = event.category) }
                 // Save the category if it's new
@@ -86,6 +89,7 @@ class ProductDetailViewModel @Inject constructor(
                     repository.addCategory(CategoryEntity(event.category))
                 }
             }
+
             is ProductDetailEvent.ToggleScanner -> _uiState.update { it.copy(showScanner = event.show) }
             is ProductDetailEvent.AddImages -> {
                 val current = _uiState.value.imagePaths
@@ -94,9 +98,11 @@ class ProductDetailViewModel @Inject constructor(
                     _uiState.update { it.copy(imagePaths = (current + event.paths).take(3)) }
                 }
             }
+
             is ProductDetailEvent.RemoveImage -> {
                 _uiState.update { it.copy(imagePaths = it.imagePaths - event.path) }
             }
+
             ProductDetailEvent.SaveProduct -> saveProduct()
             ProductDetailEvent.DeleteProduct -> deleteProduct()
             ProductDetailEvent.NavigatedBack -> _uiState.update { it.copy(navigateBack = false) }

@@ -29,18 +29,25 @@ import kotlinx.serialization.Serializable
 sealed interface Screen {
     @Serializable
     object Login : Screen
+
     @Serializable
     object Signup : Screen
+
     @Serializable
     object POS : Screen
+
     @Serializable
     object Stock : Screen
+
     @Serializable
     object History : Screen
+
     @Serializable
     object Checkout : Screen
+
     @Serializable
     object AddProduct : Screen
+
     @Serializable
     data class EditProduct(val productId: Long) : Screen
 }
@@ -92,6 +99,8 @@ fun NavGraph(
                 windowWidthSizeClass = windowWidthSizeClass,
                 onNavigateToCheckout = {
                     navController.navigate(Screen.Checkout)
+                }, onProductDetail = {
+                    navController.navigate(Screen.EditProduct(it))
                 }
             )
         }

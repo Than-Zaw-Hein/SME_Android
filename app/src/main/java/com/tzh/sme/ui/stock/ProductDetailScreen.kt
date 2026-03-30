@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -58,8 +59,23 @@ fun ProductDetailScreen(
     }
 
     if (uiState.isLoading) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+        Surface(
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+
+                ) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(8.dp))
+                    Text("Loading.......")
+                }
+            }
         }
         return
     }
@@ -67,25 +83,30 @@ fun ProductDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
+                title = {
                     Text(
-                        if (uiState.isEditMode) stringResource(R.string.edit_product) 
+                        if (uiState.isEditMode) stringResource(R.string.edit_product)
                         else stringResource(R.string.add_new_product)
-                    ) 
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack, 
+                            Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.back)
                         )
                     }
                 },
                 actions = {
                     if (uiState.isEditMode) {
-                        IconButton(onClick = { viewModel.onEvent(ProductDetailEvent.DeleteProduct) }) {
+                        IconButton(
+                            onClick = { viewModel.onEvent(ProductDetailEvent.DeleteProduct) },
+                            colors = IconButtonDefaults.iconButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
                             Icon(
-                                Icons.Default.Delete, 
+                                Icons.Default.Delete,
                                 contentDescription = stringResource(R.string.delete_product)
                             )
                         }
@@ -102,7 +123,9 @@ fun ProductDetailScreen(
                 })
                 Button(
                     onClick = { viewModel.onEvent(ProductDetailEvent.ToggleScanner(false)) },
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp)
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 32.dp)
                 ) {
                     Text(stringResource(R.string.close_scanner))
                 }
@@ -117,24 +140,30 @@ fun ProductDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    stringResource(R.string.product_images_max), 
+                    stringResource(R.string.product_images_max),
                     style = MaterialTheme.typography.titleSmall
                 )
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth().height(100.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
                 ) {
                     items(uiState.imagePaths) { path ->
                         Box(modifier = Modifier.size(100.dp)) {
                             AsyncImage(
                                 model = path,
                                 contentDescription = null,
-                                modifier = Modifier.fillMaxSize().clip(MaterialTheme.shapes.medium),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(MaterialTheme.shapes.medium),
                                 contentScale = ContentScale.Crop
                             )
                             IconButton(
                                 onClick = { viewModel.onEvent(ProductDetailEvent.RemoveImage(path)) },
-                                modifier = Modifier.align(Alignment.TopEnd).size(24.dp)
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(24.dp)
                             ) {
                                 Icon(
                                     Icons.Default.Close,
@@ -152,7 +181,7 @@ fun ProductDetailScreen(
                             ) {
                                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     Icon(
-                                        Icons.Default.AddAPhoto, 
+                                        Icons.Default.AddAPhoto,
                                         contentDescription = stringResource(R.string.add_photo)
                                     )
                                 }
@@ -178,7 +207,7 @@ fun ProductDetailScreen(
                             }
                         }) {
                             Icon(
-                                Icons.Default.QrCodeScanner, 
+                                Icons.Default.QrCodeScanner,
                                 contentDescription = stringResource(R.string.scan_barcode)
                             )
                         }
@@ -214,28 +243,34 @@ fun ProductDetailScreen(
                     OutlinedTextField(
                         value = uiState.quantity,
                         onValueChange = { viewModel.onEvent(ProductDetailEvent.QuantityChanged(it)) },
-                        label = { 
+                        label = {
                             Text(
-                                if (uiState.isEditMode) stringResource(R.string.quantity) 
+                                if (uiState.isEditMode) stringResource(R.string.quantity)
                                 else stringResource(R.string.initial_quantity)
-                            ) 
+                            )
                         },
                         modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
-                    
+
                     IconButton(onClick = {
                         val current = uiState.quantity.toIntOrNull() ?: 0
                         if (current > 0) viewModel.onEvent(ProductDetailEvent.QuantityChanged((current - 1).toString()))
                     }) {
-                        Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.decrement))
+                        Icon(
+                            Icons.Default.Remove,
+                            contentDescription = stringResource(R.string.decrement)
+                        )
                     }
-                    
+
                     IconButton(onClick = {
                         val current = uiState.quantity.toIntOrNull() ?: 0
                         viewModel.onEvent(ProductDetailEvent.QuantityChanged((current + 1).toString()))
                     }) {
-                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.increment))
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = stringResource(R.string.increment)
+                        )
                     }
                 }
 
@@ -247,10 +282,13 @@ fun ProductDetailScreen(
                     enabled = uiState.barcode.isNotBlank() && uiState.name.isNotBlank() && !uiState.isSaving
                 ) {
                     if (uiState.isSaving) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
                     } else {
                         Text(
-                            if (uiState.isEditMode) stringResource(R.string.update_product) 
+                            if (uiState.isEditMode) stringResource(R.string.update_product)
                             else stringResource(R.string.add_product)
                         )
                     }
@@ -317,7 +355,9 @@ fun CategoryDropdown(
             label = { Text(stringResource(R.string.category)) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true).fillMaxWidth()
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                .fillMaxWidth()
         )
 
         ExposedDropdownMenu(
