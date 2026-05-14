@@ -1,36 +1,42 @@
 package com.tzh.sme.domain.usecase
 
-import com.tzh.sme.data.local.entities.TransactionEntity
-import com.tzh.sme.data.local.entities.TransactionItemEntity
-import com.tzh.sme.data.local.entities.TransactionType
+import com.tzh.sme.data.model.TransactionModel
+import com.tzh.sme.data.model.TransactionItemModel
+import com.tzh.sme.data.model.TransactionType
 import com.tzh.sme.domain.model.CartItem
-import com.tzh.sme.domain.repository.StockRepository
+import com.tzh.sme.domain.repository.TransactionRepository
 import javax.inject.Inject
 
 class ProcessSaleUseCase @Inject constructor(
-    private val repository: StockRepository
+    private val transactionRepository: TransactionRepository
 ) {
-    suspend operator fun invoke(cartItems: List<CartItem>): Result<Unit> {
+    suspend operator fun invoke(
+        cartItems: List<CartItem>,
+        discount: Double = 0.0
+    ): Result<Pair<TransactionModel, List<TransactionItemModel>>> {
         if (cartItems.isEmpty()) return Result.failure(Exception("Cart is empty"))
 
         return try {
             val totalAmount = cartItems.sumOf { it.totalPrice }
-            val transaction = TransactionEntity(
+            val netAmount = totalAmount - discount
+            val transaction = TransactionModel(
                 type = TransactionType.SALE,
-                totalAmount = totalAmount
+                totalAmount = totalAmount,
+                discount = discount,
+                netAmount = netAmount
             )
 
             val items = cartItems.map { cartItem ->
-                TransactionItemEntity(
-                    transactionId = 0, // Will be set in repository
+                TransactionItemModel(
+                    transactionId = "", // Will be set in repository
                     productId = cartItem.product.id,
+                    productName = cartItem.product.name,
                     quantity = cartItem.quantity,
                     priceAtTime = cartItem.product.price
                 )
             }
 
-            repository.executeTransaction(transaction, items)
-            Result.success(Unit)
+            transactionRepository.executeTransaction(transaction, items)
         } catch (e: Exception) {
             Result.failure(e)
         }

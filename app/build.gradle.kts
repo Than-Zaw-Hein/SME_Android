@@ -40,6 +40,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -56,20 +57,22 @@ dependencies {
     implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.3.1")
     implementation("androidx.compose.material:material-icons-extended")
 
+    // Retrofit & Networking
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
     // Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     // Hilt
     implementation(libs.hilt.android)
+    implementation(libs.googleid)
+    implementation(libs.firebase.appcheck.playintegrity)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)
-
-    // Room
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
 
     // Navigation
     implementation(libs.androidx.navigation.compose)
@@ -93,21 +96,27 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.storage)
+    implementation(libs.firebase.appcheck.debug)
     implementation(libs.play.services.auth)
+//    implementation(libs.play.services.base)
+
+    // Credentials
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
 
     // Apache POI (Excel)
     implementation(libs.poi)
     implementation(libs.poi.ooxml)
     
-//    // Concurrent & Guava
-//    implementation(libs.guava.listenablefuture)
-//    implementation(libs.androidx.concurrent.futures)
     // Standard Guava/ListenableFuture support
     implementation("com.google.guava:guava:33.0.0-android")
 
     // Better way: Kotlin Coroutines support for ListenableFuture
     implementation("androidx.concurrent:concurrent-futures-ktx:1.2.0")
 
+    // Bluetooth Printer
+    implementation(libs.escpos)
 
     // test
     testImplementation(libs.junit)

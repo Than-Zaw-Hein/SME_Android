@@ -1,9 +1,27 @@
 package com.tzh.sme.ui.history
 
-import com.tzh.sme.data.local.entities.TransactionEntity
+import com.tzh.sme.data.model.TransactionModel
+import com.tzh.sme.data.model.TransactionType
 
-sealed interface HistoryUiState {
-    object Loading : HistoryUiState
-    data class Success(val transactions: List<TransactionEntity>) : HistoryUiState
-    data class Error(val message: String) : HistoryUiState
+data class HistoryUiState(
+    val transactions: List<TransactionModel> = emptyList(),
+    val filteredTransactions: List<TransactionModel> = emptyList(),
+    val selectedTab: HistoryTab = HistoryTab.SALES,
+    val selectedStockFilter: TransactionType? = null,
+    val searchQuery: String = "",
+    val startDate: Long? = null,
+    val endDate: Long? = null,
+    val isLoading: Boolean = false,
+    val error: String? = null
+)
+
+enum class HistoryTab {
+    SALES, STOCK
+}
+
+sealed class HistoryEvent {
+    data class OnTabSelected(val tab: HistoryTab) : HistoryEvent()
+    data class OnStockFilterSelected(val type: TransactionType?) : HistoryEvent()
+    data class OnSearchQueryChanged(val query: String) : HistoryEvent()
+    data class OnDateRangeSelected(val start: Long?, val end: Long?) : HistoryEvent()
 }

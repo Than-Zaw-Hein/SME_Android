@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.tzh.sme.data.local.dao.TransactionDao
+import com.tzh.sme.domain.repository.TransactionRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
@@ -16,12 +16,12 @@ import java.io.FileOutputStream
 class ExportWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val transactionDao: TransactionDao
+    private val transactionRepository: TransactionRepository
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         return try {
-            val transactions = transactionDao.getAllTransactions().first()
+            val transactions = transactionRepository.getAllTransactions().first()
             
             val workbook = XSSFWorkbook()
             val sheet = workbook.createSheet("Transactions")
@@ -36,7 +36,7 @@ class ExportWorker @AssistedInject constructor(
             // Data
             transactions.forEachIndexed { index, tx ->
                 val row = sheet.createRow(index + 1)
-                row.createCell(0).setCellValue(tx.transactionId.toDouble())
+                row.createCell(0).setCellValue(tx.transactionId)
                 row.createCell(1).setCellValue(tx.type.name)
                 row.createCell(2).setCellValue(tx.totalAmount)
                 row.createCell(3).setCellValue(tx.timestamp.toDouble())

@@ -1,9 +1,9 @@
 package com.tzh.sme.domain.model
 
-import com.tzh.sme.data.local.entities.ProductEntity
+import com.tzh.sme.data.model.ProductModel
 
 data class CartItem(
-    val product: ProductEntity,
+    val product: ProductModel,
     val quantity: Int
 ) {
     val totalPrice: Double get() = product.price * quantity

@@ -1,9 +1,18 @@
 package com.tzh.sme.ui.stock
 
-import com.tzh.sme.data.local.entities.ProductEntity
+import com.tzh.sme.data.model.ProductModel
 
-sealed interface StockUiState {
-    object Loading : StockUiState
-    data class Success(val products: List<ProductEntity>) : StockUiState
-    data class Error(val message: String) : StockUiState
+data class StockUiState(
+    val products: List<ProductModel> = emptyList(),
+    val searchQuery: String = "",
+    val showScanner: Boolean = false,
+    val isLoading: Boolean = false,
+    val error: String? = null
+)
+
+sealed class StockEvent {
+    data class OnSearchQueryChange(val query: String) : StockEvent()
+    data class OnToggleScanner(val show: Boolean) : StockEvent()
+    data class OnBarcodeScanned(val barcode: String) : StockEvent()
+    data object OnSyncData : StockEvent()
 }
