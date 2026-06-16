@@ -14,7 +14,7 @@ interface FileApiService {
     ): Response<FileUploadResponse>
 }
 
-const val BASE_URL = "http://192.168.1.6/LocalFileServer/"
+// FILE_SERVER_URL is now defined in app/build.gradle.kts as BuildConfig field
 
 data class FileUploadResponse(
     val fileName: String,

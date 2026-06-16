@@ -19,9 +19,13 @@ enum class HistoryTab {
     SALES, STOCK
 }
 
-sealed class HistoryEvent {
-    data class OnTabSelected(val tab: HistoryTab) : HistoryEvent()
-    data class OnStockFilterSelected(val type: TransactionType?) : HistoryEvent()
-    data class OnSearchQueryChanged(val query: String) : HistoryEvent()
-    data class OnDateRangeSelected(val start: Long?, val end: Long?) : HistoryEvent()
+sealed interface HistoryUiIntent {
+    data class SelectTab(val tab: HistoryTab) : HistoryUiIntent
+    data class SelectStockFilter(val type: TransactionType?) : HistoryUiIntent
+    data class UpdateSearchQuery(val query: String) : HistoryUiIntent
+    data class SelectDateRange(val start: Long?, val end: Long?) : HistoryUiIntent
+}
+
+sealed interface HistoryUiSideEffect {
+    data class ShowError(val message: String) : HistoryUiSideEffect
 }

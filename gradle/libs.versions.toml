@@ -31,6 +31,12 @@ firebaseAppcheckPlayintegrity = "19.0.2"
 playServicesAuth = "21.5.1"
 playServicesBase = "18.10.0"
 escpos = "3.4.0"
+mapsCompose = "6.1.2"
+playServicesMaps = "19.0.0"
+mockk = "1.13.13"
+kotlinxCoroutinesTest = "1.9.0"
+turbine = "1.1.0"
+archCoreTesting = "2.2.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -103,6 +109,16 @@ firebase-appcheck-playintegrity = { group = "com.google.firebase", name = "fireb
 
 # Printer
 escpos = { group = "com.github.DantSu", name = "ESCPOS-ThermalPrinter-Android", version.ref = "escpos" }
+
+# Google Maps
+maps-compose = { group = "com.google.maps.android", name = "maps-compose", version.ref = "mapsCompose" }
+google-play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
+
+# Testing
+mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
+turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
+androidx-arch-core-testing = { group = "androidx.arch.core", name = "core-testing", version.ref = "archCoreTesting" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

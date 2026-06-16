@@ -16,7 +16,7 @@ interface StockRepository {
     suspend fun executeTransaction(transaction: TransactionModel, items: List<TransactionItemModel>): Result<Pair<TransactionModel, List<TransactionItemModel>>>
     
     fun getAllCategories(): Flow<List<CategoryModel>>
-    suspend fun addCategory(category: CategoryModel)
+    suspend fun addCategory(category: CategoryModel) : CategoryModel?
     suspend fun deleteCategory(category: CategoryModel)
     
     fun generateNextId(): String

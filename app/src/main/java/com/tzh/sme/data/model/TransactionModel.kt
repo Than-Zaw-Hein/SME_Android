@@ -9,11 +9,13 @@ data class TransactionModel(
     val type: TransactionType = TransactionType.SALE,
     val timestamp: Long = System.currentTimeMillis(),
     val totalAmount: Double = 0.0,
+    val totalCost: Double = 0.0,
     val discount: Double = 0.0,
     val netAmount: Double = 0.0,
     val supplierId: String? = null,
     val supplierName: String? = null,
-    val userId: String? = null
+    val userId: String? = null,
+    val userName: String? = null
 )
 
 data class TransactionItemModel(
@@ -22,5 +24,6 @@ data class TransactionItemModel(
     val productId: String = "",
     val productName: String = "",
     val quantity: Int = 0,
-    val priceAtTime: Double = 0.0
+    val priceAtTime: Double = 0.0,
+    val costAtTime: Double = 0.0
 )

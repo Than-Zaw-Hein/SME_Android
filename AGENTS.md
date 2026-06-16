@@ -21,7 +21,7 @@
 - `google-services.json` is **checked into the repo** — no need to generate/download one
 - Primary backend: **Firebase** (Firestore, Auth, Storage) + Firebase AppCheck (debug in dev, Play Integrity in release)
 - Secondary backend: local file server via **Retrofit** at hardcoded `http://192.168.1.6/LocalFileServer/` (`data/remote/FileApiService.kt:17`) — `usesCleartextTraffic=true` in AndroidManifest is for this
-- Debug AppCheck token: `C91B00E1-E341-4E8C-8D04-767E6881211F`
+- Debug AppCheck token: `AC1B9C11-710B-4653-8FF9-132573866E52`
 
 ## Key Libraries
 - **CameraX + ML Kit** for barcode scanning (ui/inventory)

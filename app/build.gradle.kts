@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,6 +9,14 @@ plugins {
     kotlin("plugin.serialization") version "2.0.21"
     alias(libs.plugins.google.services)
 }
+// 1. Manually load local.properties at the very top of the build file
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        load(localPropertiesFile.inputStream())
+    }
+}
+val fileServerUrl: String = localProperties.getProperty("FILE_SERVER_URL") ?: ""
 
 android {
     namespace = "com.tzh.sme"
@@ -18,6 +28,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+
+        buildConfigField("String", "FILE_SERVER_URL", fileServerUrl)
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -47,6 +59,7 @@ android {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -99,12 +112,10 @@ dependencies {
     implementation(libs.firebase.storage)
     implementation(libs.firebase.appcheck.debug)
     implementation(libs.play.services.auth)
-//    implementation(libs.play.services.base)
-
+    implementation(libs.play.services.base)
     // Credentials
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
-
     // Apache POI (Excel)
     implementation(libs.poi)
     implementation(libs.poi.ooxml)
@@ -118,8 +129,16 @@ dependencies {
     // Bluetooth Printer
     implementation(libs.escpos)
 
+    // Google Maps
+    implementation("com.google.maps.android:maps-compose:6.1.2")
+    implementation("com.google.android.gms:play-services-maps:19.0.0")
+
     // test
     testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
+    testImplementation(libs.androidx.arch.core.testing)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

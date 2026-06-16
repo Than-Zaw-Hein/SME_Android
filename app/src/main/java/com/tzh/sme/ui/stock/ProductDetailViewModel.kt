@@ -1,66 +1,27 @@
 package com.tzh.sme.ui.stock
 
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tzh.sme.data.model.CategoryModel
-import com.tzh.sme.data.model.ProductModel
-import com.tzh.sme.data.model.TransactionItemModel
-import com.tzh.sme.data.model.TransactionModel
-import com.tzh.sme.data.model.TransactionType
-import com.tzh.sme.data.model.SupplierModel
-import com.tzh.sme.data.remote.BASE_URL
-import com.tzh.sme.domain.repository.CategoryRepository
-import com.tzh.sme.domain.repository.FileRepository
-import com.tzh.sme.domain.repository.ProductRepository
-import com.tzh.sme.domain.repository.SupplierRepository
-import com.tzh.sme.domain.repository.TransactionRepository
+import androidx.navigation.toRoute
+import com.tzh.sme.data.DefaultData.defaultCategory
+import com.tzh.sme.data.model.*
+import com.tzh.sme.domain.usecase.stock.StockUseCases
+import com.tzh.sme.ui.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.Collections
 import javax.inject.Inject
 
-sealed class ProductDetailEvent {
-    data class NameChanged(val name: String) : ProductDetailEvent()
-    data class BarcodeChanged(val barcode: String) : ProductDetailEvent()
-    data class PriceChanged(val price: String) : ProductDetailEvent()
-    data class QuantityChanged(val quantity: String) : ProductDetailEvent()
-    data class TransactionTypeChanged(val type: TransactionType) : ProductDetailEvent()
-    data class CategoryChanged(val category: CategoryModel) : ProductDetailEvent()
-    data class DescriptionChanged(val description: String) : ProductDetailEvent()
-    data class SupplierChanged(val supplier: SupplierModel?) : ProductDetailEvent()
-    data class AddImages(val uris: List<String>) : ProductDetailEvent()
-    data class RemoveImage(val path: String) : ProductDetailEvent()
-    data class ToggleScanner(val show: Boolean) : ProductDetailEvent()
-    object SaveProduct : ProductDetailEvent()
-    object DeleteProduct : ProductDetailEvent()
-    data class AddCategory(val category: CategoryModel) : ProductDetailEvent()
-    data class UpdateCategory(val category: CategoryModel) : ProductDetailEvent()
-    data class DeleteCategory(val category: CategoryModel) : ProductDetailEvent()
-    data class AddSupplier(val supplier: SupplierModel) : ProductDetailEvent()
-    object ErrorShown : ProductDetailEvent()
-}
-
-sealed interface ProductDetailEffect {
-    object NavigateBack : ProductDetailEffect
-}
-
 @HiltViewModel
 class ProductDetailViewModel @Inject constructor(
-    private val repository: ProductRepository,
-    private val fileRepository: FileRepository,
-    private val categoryRepository: CategoryRepository,
-    private val supplierRepository: SupplierRepository,
-    private val transactionRepository: TransactionRepository,
+    private val stockUseCases: StockUseCases,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -68,68 +29,58 @@ class ProductDetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ProductDetailUiState())
     val uiState = _uiState.asStateFlow()
 
-    private val _effect = Channel<ProductDetailEffect>()
-    val effect = _effect.receiveAsFlow()
+    private val _sideEffect = Channel<ProductDetailUiSideEffect>(Channel.BUFFERED)
+    val sideEffect = _sideEffect.receiveAsFlow()
 
-    // Use a synchronized list to avoid potential issues during rapid interactions
     private val removeImageList = Collections.synchronizedList(mutableListOf<String>())
 
     init {
-        loadProduct()
-        loadCategories()
-        loadSuppliers()
+        loadInitialData()
     }
 
-    private fun loadCategories() {
+    private fun loadInitialData() {
         viewModelScope.launch {
-            categoryRepository.getAllCategories().collect { categories ->
-                _uiState.update { it.copy(categories = categories) }
+            launch {
+                combine(
+                    stockUseCases.getCategories(),
+                    stockUseCases.getSuppliers()
+                ) { categories, suppliers ->
+                    _uiState.update { it.copy(categories = categories, suppliers = suppliers) }
+                }.collect()
             }
-        }
-    }
-
-    private fun loadSuppliers() {
-        viewModelScope.launch {
-            supplierRepository.getAllSuppliers().collect { suppliers ->
-                _uiState.update { it.copy(suppliers = suppliers) }
+            launch {
+                loadProduct()
             }
         }
     }
 
     private fun loadProduct() {
-        val id = productId ?: return
+        val id = productId ?: "-1"
         if (id == "-1") {
             _uiState.update { it.copy(isEditMode = false) }
             return
         }
 
         viewModelScope.launch {
-            val categories = categoryRepository.getAllCategories().first()
-            _uiState.update {
-                it.copy(
-                    isLoading = true,
-                    isEditMode = true,
-                    categories = categories
-                )
-            }
-            val product = repository.getProductById(id)
-
+            _uiState.update { it.copy(isLoading = true, isEditMode = true) }
+            val product = stockUseCases.getProductById(id)
             if (product != null) {
-                val selectedCategory = categories.find { it.id == product.categoryId }
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         id = product.id,
                         name = product.name,
                         barcode = product.barcode,
-                        price = product.price.toString(),
-                        editableQty = "0", // Start enter qty from zero
+                        sellPrice = product.sellPrice.toString(),
+                        costPrice = product.costPrice.toString(),
+                        editableQty = "0",
                         currentQty = product.quantity,
-                        category = selectedCategory ?: CategoryModel(),
+                        minStockLevel = product.minStockLevel.toString(),
+                        category = it.categories.find { c -> c.id == product.categoryId }
+                            ?: CategoryModel(),
+                        selectedSupplier = it.suppliers.find { s -> s.id == product.supplierId },
                         description = product.description,
-                        imagePaths = product.imagePaths.map { path ->
-                            if (path.startsWith("http")) path else BASE_URL + path
-                        }
+                        imagePaths = product.imagePaths
                     )
                 }
                 loadProductTransactions(product.id)
@@ -141,116 +92,117 @@ class ProductDetailViewModel @Inject constructor(
 
     private fun loadProductTransactions(id: String) {
         viewModelScope.launch {
-            transactionRepository.getTransactionsByProduct(id).collect { history ->
+            stockUseCases.getProductTransactions(id).collect { history ->
                 _uiState.update { it.copy(priceHistory = history) }
             }
         }
     }
 
-    fun onEvent(event: ProductDetailEvent) {
-        when (event) {
-            is ProductDetailEvent.NameChanged -> _uiState.update { it.copy(name = event.name) }
-            is ProductDetailEvent.BarcodeChanged -> _uiState.update { it.copy(barcode = event.barcode) }
-            is ProductDetailEvent.PriceChanged -> _uiState.update { it.copy(price = event.price) }
-            is ProductDetailEvent.QuantityChanged -> _uiState.update { it.copy(editableQty = event.quantity) }
-            is ProductDetailEvent.TransactionTypeChanged -> _uiState.update {
+    fun sendIntent(intent: ProductDetailUiIntent) {
+        when (intent) {
+            is ProductDetailUiIntent.NameChanged -> _uiState.update { it.copy(name = intent.name) }
+            is ProductDetailUiIntent.BarcodeChanged -> _uiState.update { it.copy(barcode = intent.barcode) }
+            is ProductDetailUiIntent.PriceChanged -> _uiState.update { it.copy(sellPrice = intent.price) }
+            is ProductDetailUiIntent.CostPriceChanged -> _uiState.update { it.copy(costPrice = intent.costPrice) }
+            is ProductDetailUiIntent.QuantityChanged -> _uiState.update { it.copy(editableQty = intent.quantity) }
+            is ProductDetailUiIntent.MinStockChanged -> _uiState.update { it.copy(minStockLevel = intent.minStock) }
+            is ProductDetailUiIntent.TransactionTypeChanged -> _uiState.update {
                 it.copy(
-                    transactionType = event.type
+                    transactionType = intent.type,
+                    editableQty = "0"
                 )
             }
 
-            is ProductDetailEvent.CategoryChanged -> _uiState.update { it.copy(category = event.category) }
-            is ProductDetailEvent.DescriptionChanged -> _uiState.update { it.copy(description = event.description) }
-            is ProductDetailEvent.SupplierChanged -> _uiState.update { it.copy(selectedSupplier = event.supplier) }
-            is ProductDetailEvent.AddImages -> {
-                _uiState.update { it.copy(imagePaths = it.imagePaths + event.uris) }
-            }
+            is ProductDetailUiIntent.CategoryChanged -> _uiState.update { it.copy(category = intent.category) }
+            is ProductDetailUiIntent.DescriptionChanged -> _uiState.update { it.copy(description = intent.description) }
+            is ProductDetailUiIntent.SupplierChanged -> _uiState.update { it.copy(selectedSupplier = intent.supplier) }
+            is ProductDetailUiIntent.AddImages -> _uiState.update { it.copy(imagePaths = it.imagePaths + intent.uris) }
+            is ProductDetailUiIntent.RemoveImage -> removeImage(intent.path)
+            is ProductDetailUiIntent.ToggleScanner -> _uiState.update { it.copy(showScanner = intent.show) }
+            is ProductDetailUiIntent.SaveProduct -> saveProduct()
+            is ProductDetailUiIntent.DeleteProduct -> deleteProduct()
+            is ProductDetailUiIntent.AddCategory -> addCategory(intent.category)
+            is ProductDetailUiIntent.UpdateCategory -> updateCategory(intent.category)
+            is ProductDetailUiIntent.DeleteCategory -> deleteCategory(intent.category)
+            is ProductDetailUiIntent.AddSupplier -> addSupplier(intent.supplier)
+            is ProductDetailUiIntent.ClearError -> _uiState.update { it.copy(error = null) }
+        }
+    }
 
-            is ProductDetailEvent.ErrorShown -> {
-                _uiState.update { it.copy(error = null) }
-            }
+    private fun removeImage(path: String) {
+        if (!path.startsWith("content://")) {
+            removeImageList.add(path)
+        }
+        _uiState.update { it.copy(imagePaths = it.imagePaths.filter { p -> p != path }) }
+    }
 
-            is ProductDetailEvent.RemoveImage -> removeImage(event.path)
-            is ProductDetailEvent.ToggleScanner -> _uiState.update { it.copy(showScanner = event.show) }
-            is ProductDetailEvent.SaveProduct -> saveProduct()
-            is ProductDetailEvent.DeleteProduct -> deleteProduct()
-            is ProductDetailEvent.AddCategory -> {
-                viewModelScope.launch {
-                    val currentCategories = _uiState.value.categories
-                    val isDuplicate = currentCategories.any {
-                        it.name.equals(event.category.name, ignoreCase = true)
-                    }
-
-                    if (isDuplicate) {
-                        _uiState.update { it.copy(error = "Category '${event.category.name}' already exists") }
-                    } else {
-                        categoryRepository.addCategory(event.category)
-                        _uiState.update { it.copy(category = event.category, error = null) }
-                    }
-                }
-            }
-
-            is ProductDetailEvent.UpdateCategory -> {
-                viewModelScope.launch {
-                    val currentCategories = _uiState.value.categories
-                    val isDuplicate = currentCategories.any {
-                        it.id != event.category.id && it.name.equals(
-                            event.category.name,
-                            ignoreCase = true
+    private fun addCategory(category: CategoryModel) {
+        viewModelScope.launch {
+            if (_uiState.value.categories.any {
+                    it.name.equals(
+                        category.name,
+                        ignoreCase = true
+                    )
+                }) {
+                _uiState.update { it.copy(error = "Category '${category.name}' already exists") }
+            } else {
+                stockUseCases.addCategory(category).onSuccess { category ->
+                    _uiState.update {
+                        it.copy(
+                            category = category ?: defaultCategory,
+                            error = null
                         )
                     }
-
-                    if (isDuplicate) {
-                        _uiState.update { it.copy(error = "Category '${event.category.name}' already exists") }
-                    } else {
-                        categoryRepository.updateCategory(event.category)
-                        // If the updated category was selected, update the selection too
-                        if (_uiState.value.category.id == event.category.id) {
-                            _uiState.update { it.copy(category = event.category, error = null) }
-                        }
-                    }
+                }.onFailure {
+                    _uiState.update { it.copy(category = defaultCategory, error = null) }
                 }
+
             }
+        }
+    }
 
-            is ProductDetailEvent.DeleteCategory -> {
-                viewModelScope.launch {
-                    categoryRepository.deleteCategory(event.category)
-                    if (_uiState.value.category.id == event.category.id) {
-                        _uiState.update { it.copy(category = CategoryModel()) }
-                    }
-                }
-            }
-
-            is ProductDetailEvent.AddSupplier -> {
-                viewModelScope.launch {
-                    val currentSuppliers = _uiState.value.suppliers
-                    val isDuplicate = currentSuppliers.any {
-                        it.name.equals(event.supplier.name, ignoreCase = true)
-                    }
-
-                    if (isDuplicate) {
-                        _uiState.update { it.copy(error = "Supplier '${event.supplier.name}' already exists") }
-                    } else {
-                        val supplierId = supplierRepository.addSupplier(event.supplier)
-                        _uiState.update {
-                            it.copy(
-                                selectedSupplier = event.supplier.copy(id = supplierId),
-                                error = null
-                            )
-                        }
-                    }
+    private fun updateCategory(category: CategoryModel) {
+        viewModelScope.launch {
+            if (_uiState.value.categories.any {
+                    it.id != category.id && it.name.equals(
+                        category.name,
+                        ignoreCase = true
+                    )
+                }) {
+                _uiState.update { it.copy(error = "Category '${category.name}' already exists") }
+            } else {
+                stockUseCases.updateCategory(category)
+                if (_uiState.value.category.id == category.id) {
+                    _uiState.update { it.copy(category = category, error = null) }
                 }
             }
         }
     }
 
-    private fun removeImage(path: String) {
-        // Track the image for deletion upon saving if it's a remote URL
-        if (!path.startsWith("content://")) {
-            removeImageList.add(path)
+    private fun deleteCategory(category: CategoryModel) {
+        viewModelScope.launch {
+            stockUseCases.deleteCategory(category)
+            if (_uiState.value.category.id == category.id) {
+                _uiState.update { it.copy(category = CategoryModel()) }
+            }
         }
-        _uiState.update {
-            it.copy(imagePaths = it.imagePaths.filter { p -> p != path })
+    }
+
+    private fun addSupplier(supplier: SupplierModel) {
+        viewModelScope.launch {
+            if (_uiState.value.suppliers.any { it.name.equals(supplier.name, ignoreCase = true) }) {
+                _uiState.update { it.copy(error = "Supplier '${supplier.name}' already exists") }
+            } else {
+                val result = stockUseCases.addSupplier(supplier)
+                result.onSuccess { id ->
+                    _uiState.update {
+                        it.copy(
+                            selectedSupplier = supplier.copy(id = id),
+                            error = null
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -258,12 +210,21 @@ class ProductDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isDeleting = true) }
             val state = uiState.value
-            val product = repository.getProductById(state.id)
+            val product = stockUseCases.getProductById(state.id)
             if (product != null) {
-                fileRepository.deleteProductImagesFolder(state.id)
-                repository.deleteProduct(product)
+                val user = stockUseCases.getAuthState.currentUser.value
+                val shopId = user?.shopId ?: user?.id
+                if (shopId != null) {
+                    val shop = stockUseCases.getShopById(shopId).first()
+                    stockUseCases.deleteProductImagesFolder(
+                        state.id,
+                        state.name,
+                        shop?.name ?: "UnknownShop"
+                    )
+                }
+                stockUseCases.deleteProduct(product)
                 _uiState.update { it.copy(isDeleting = false) }
-                _effect.send(ProductDetailEffect.NavigateBack)
+                _sideEffect.send(ProductDetailUiSideEffect.NavigateBack)
             } else {
                 _uiState.update { it.copy(isDeleting = false) }
             }
@@ -272,143 +233,107 @@ class ProductDetailViewModel @Inject constructor(
 
     private fun saveProduct() {
         val state = uiState.value
-        if (state.name.isEmpty() || state.price.isEmpty() || state.editableQty.isEmpty()) {
+        if (state.name.isEmpty() || state.sellPrice.isEmpty() || state.costPrice.isEmpty()) {
             _uiState.update { it.copy(error = "Please fill in all required fields") }
             return
         }
 
+        if (state.costPrice > state.sellPrice) {
+            _uiState.update { it.copy(error = "Cost price must not be greater than selling price.") }
+            return
+        }
+
+
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, error = null) }
+            val pId =
+                if (state.id.isEmpty() || state.id == "-1") stockUseCases.generateProductId() else state.id
 
-            val pId = if (state.id.isEmpty() || state.id == "-1") {
-                repository.generateNextId()
-            } else {
-                state.id
-            }
-
-            val existingProductByBarcode = repository.getProductByBarcode(state.barcode)
-            if (existingProductByBarcode != null && existingProductByBarcode.id != pId) {
-                _uiState.update {
-                    it.copy(
-                        isSaving = false,
-                        error = "A product with this barcode already exists: ${existingProductByBarcode.name}"
-                    )
-                }
+            val existingBarcode = stockUseCases.getProductByBarcode(state.barcode)
+            if (existingBarcode != null && existingBarcode.id != pId) {
+                _uiState.update { it.copy(isSaving = false, error = "Barcode already exists") }
                 return@launch
             }
 
             val oldProduct =
-                if (state.id.isNotEmpty() && state.id != "-1") repository.getProductById(state.id) else null
-            val oldQuantity = oldProduct?.quantity ?: 0
-            val enteredQuantity = state.editableQty.toIntOrNull() ?: 0
-            val transactionType = state.transactionType
+                if (state.id.isNotEmpty() && state.id != "-1") stockUseCases.getProductById(state.id) else null
+            val finalImagePaths = mutableListOf<String>()
+            val shop = stockUseCases.getAuthState.currentUser.value?.shopId?.let {
+                stockUseCases.getShopById(it).first()
+            }
+            val shopName = shop?.name ?: "UnknownShop"
 
-            // Calculate new quantity based on transaction type
-            // The TransactionRepository.executeTransaction will handle the actual stock update in Firestore
-            // We just need to pass the delta (enteredQuantity) and the type.
-
-            // Using timestamps in filenames prevents name collisions that lead to accidental deletions
-            val finalImagePaths = state.imagePaths.mapIndexed { index, path ->
+            for ((index, path) in state.imagePaths.withIndex()) {
                 if (path.startsWith("content://")) {
-                    async {
-                        val timestamp = System.currentTimeMillis()
-                        val fileName = "${pId}_${timestamp}_$index.webp"
-                        val result =
-                            fileRepository.uploadProductImage(Uri.parse(path), pId, fileName)
-                        result.getOrNull()?.removePrefix(BASE_URL)
+                    val result = stockUseCases.uploadProductImage(
+                        Uri.parse(path),
+                        pId,
+                        state.name,
+                        shopName,
+                        "${pId}_${System.currentTimeMillis()}_$index.webp"
+                    )
+                    result.onSuccess { finalImagePaths.add(it) }.onFailure {
+                        _uiState.update { s ->
+                            s.copy(
+                                isSaving = false,
+                                error = "Upload failed: ${it.message}"
+                            ); s
+                        }; return@launch
                     }
                 } else {
-                    async { path.removePrefix(BASE_URL) }
+                    finalImagePaths.add(path)
                 }
-            }.awaitAll().filterNotNull()
-
-            if (finalImagePaths.size < state.imagePaths.size) {
-                _uiState.update {
-                    it.copy(
-                        isSaving = false,
-                        error = "Some images failed to upload to the server."
-                    )
-                }
-                return@launch
             }
-
-            val newPrice = state.price.toDoubleOrNull() ?: 0.0
 
             val productToSave = ProductModel(
                 id = pId,
                 name = state.name,
                 barcode = state.barcode,
-                price = newPrice,
-                quantity = oldQuantity, // Keep old quantity; TransactionRepository.executeTransaction will update it atomically
+                sellPrice = state.sellPrice.toDoubleOrNull() ?: 0.0,
+                costPrice = state.costPrice.toDoubleOrNull() ?: 0.0,
+                quantity = oldProduct?.quantity ?: 0,
+                minStockLevel = state.minStockLevel.toIntOrNull() ?: 0,
                 categoryId = state.category.id,
+                supplierId = state.selectedSupplier?.id ?: "",
                 description = state.description,
                 imagePaths = finalImagePaths
             )
 
-            try {
-                repository.addOrUpdateProduct(productToSave)
-
-                // Transaction Logic
-                val priceChanged = oldProduct == null || oldProduct.price != newPrice
-
-                if (enteredQuantity != 0 || priceChanged) {
-                    val totalAmount = newPrice * enteredQuantity
+            stockUseCases.addOrUpdateProduct(productToSave).onSuccess {
+                val enteredQty = state.editableQty.toIntOrNull() ?: 0
+                if (enteredQty != 0 || ((state.costPrice.toDoubleOrNull()
+                        ?: 0.0) != (oldProduct?.costPrice ?: 0.0))
+                ) {
+                    val currentUser = stockUseCases.getAuthState.currentUser.value
                     val transaction = TransactionModel(
-                        type = transactionType,
-                        totalAmount = totalAmount,
-                        netAmount = totalAmount,
+                        type = state.transactionType,
+                        totalAmount = enteredQty * productToSave.costPrice,
+                        netAmount = enteredQty * productToSave.costPrice,
+                        userId = currentUser?.id,
+                        userName = currentUser?.displayName ?: "Unknown Staff",
                         supplierId = state.selectedSupplier?.id,
                         supplierName = state.selectedSupplier?.name
                     )
+
                     val item = TransactionItemModel(
-                        productId = pId,
-                        productName = state.name,
-                        quantity = enteredQuantity,
-                        priceAtTime = newPrice
+                        productId = productToSave.id,
+                        productName = productToSave.name,
+                        quantity = enteredQty,
+                        priceAtTime = productToSave.costPrice
                     )
-                    transactionRepository.executeTransaction(transaction, listOf(item))
+
+                    stockUseCases.executeTransaction(transaction, listOf(item))
                 }
 
-                // Clear the list immediately to prevent multiple deletion attempts
                 val toDelete = removeImageList.toList()
                 removeImageList.clear()
-
                 if (toDelete.isNotEmpty()) {
-                    toDelete.map { path ->
-                        async {
-                            fileRepository.deleteProductImage(path.removePrefix(BASE_URL))
-                        }
-                    }.awaitAll()
+                    toDelete.map { async { stockUseCases.deleteProductImage(it) } }.awaitAll()
                 }
 
                 _uiState.update { it.copy(isSaving = false) }
-                _effect.send(ProductDetailEffect.NavigateBack)
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isSaving = false, error = e.message) }
-            }
+                _sideEffect.send(ProductDetailUiSideEffect.NavigateBack)
+            }.onFailure { _uiState.update { s -> s.copy(isSaving = false, error = it.message); s } }
         }
     }
 }
-
-data class ProductDetailUiState(
-    val id: String = "",
-    val name: String = "",
-    val barcode: String = "",
-    val price: String = "",
-    val editableQty: String = "0",
-    val currentQty: Int = 0,
-    val transactionType: TransactionType = TransactionType.STOCK_IN,
-    val category: CategoryModel = CategoryModel(),
-    val description: String = "",
-    val suppliers: List<SupplierModel> = emptyList(),
-    val selectedSupplier: SupplierModel? = null,
-    val imagePaths: List<String> = emptyList(),
-    val categories: List<CategoryModel> = emptyList(),
-    val priceHistory: List<Pair<TransactionModel, TransactionItemModel>> = emptyList(),
-    val isLoading: Boolean = false,
-    val isSaving: Boolean = false,
-    val isDeleting: Boolean = false,
-    val isEditMode: Boolean = false,
-    val showScanner: Boolean = false,
-    val error: String? = null
-)

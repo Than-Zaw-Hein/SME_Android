@@ -3,6 +3,7 @@ package com.tzh.sme.di
 import com.tzh.sme.data.repository.AuthRepositoryImpl
 import com.tzh.sme.data.repository.CategoryRepositoryImpl
 import com.tzh.sme.data.repository.FirebaseStorageRepositoryImpl
+import com.tzh.sme.data.repository.PrinterRepositoryImpl
 import com.tzh.sme.data.repository.ProductRepositoryImpl
 import com.tzh.sme.data.repository.StockRepositoryImpl
 import com.tzh.sme.data.repository.SupplierRepositoryImpl
@@ -11,6 +12,7 @@ import com.tzh.sme.data.repository.UserRepositoryImpl
 import com.tzh.sme.domain.repository.AuthRepository
 import com.tzh.sme.domain.repository.CategoryRepository
 import com.tzh.sme.domain.repository.FileRepository
+import com.tzh.sme.domain.repository.PrinterRepository
 import com.tzh.sme.domain.repository.ProductRepository
 import com.tzh.sme.domain.repository.StockRepository
 import com.tzh.sme.domain.repository.SupplierRepository
@@ -25,6 +27,12 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindPrinterRepository(
+        printerRepositoryImpl: PrinterRepositoryImpl
+    ): PrinterRepository
 
     @Binds
     @Singleton

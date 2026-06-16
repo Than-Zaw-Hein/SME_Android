@@ -12,9 +12,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.tzh.sme.ui.pos.SettingsType
+import com.tzh.sme.ui.SettingsType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,7 +26,7 @@ fun SettingsDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(type.label) },
+                title = { Text(stringResource(type.labelRes)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -46,7 +47,7 @@ fun SettingsDetailScreen(
                 SettingsType.TERMS_OF_SERVICE -> LegalContent(title = "Terms of Service")
                 else -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = "Content for ${type.label} is coming soon.")
+                        Text(text = "Content for ${stringResource(type.labelRes)} is coming soon.")
                     }
                 }
             }

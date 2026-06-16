@@ -2,7 +2,6 @@ package com.tzh.sme.ui.stock
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
@@ -12,6 +11,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -21,13 +21,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -36,8 +35,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.tzh.sme.R
+import com.tzh.sme.data.DefaultData
 import com.tzh.sme.data.model.*
 import com.tzh.sme.ui.inventory.BarcodeScannerView
 import com.tzh.sme.ui.theme.SMETheme
@@ -50,20 +51,24 @@ fun ProductDetailScreen(
     viewModel: ProductDetailViewModel,
     onNavigateBack: () -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(viewModel.effect) {
-        viewModel.effect.collect { effect ->
+    LaunchedEffect(viewModel.sideEffect) {
+        viewModel.sideEffect.collect { effect ->
             when (effect) {
-                is ProductDetailEffect.NavigateBack -> onNavigateBack()
+                ProductDetailUiSideEffect.NavigateBack -> onNavigateBack()
+                is ProductDetailUiSideEffect.ShowError -> snackbarHostState.showSnackbar(effect.message)
+                is ProductDetailUiSideEffect.ShowToast -> snackbarHostState.showSnackbar(effect.message)
             }
         }
     }
 
     ProductDetailContent(
         uiState = uiState,
-        onEvent = viewModel::onEvent,
-        onNavigateBack = onNavigateBack
+        onIntent = viewModel::sendIntent,
+        onNavigateBack = onNavigateBack,
+        snackbarHostState = snackbarHostState
     )
 }
 
@@ -71,15 +76,16 @@ fun ProductDetailScreen(
 @Composable
 fun ProductDetailContent(
     uiState: ProductDetailUiState,
-    onEvent: (ProductDetailEvent) -> Unit,
-    onNavigateBack: () -> Unit
+    onIntent: (ProductDetailUiIntent) -> Unit,
+    onNavigateBack: () -> Unit,
+    snackbarHostState: SnackbarHostState
 ) {
     val scrollState = rememberScrollState()
     val context = LocalContext.current
-    val snackbarHostState = remember { SnackbarHostState() }
     var showHistorySheet by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
     LaunchedEffect(uiState.error) {
         uiState.error?.let { error ->
             snackbarHostState.showSnackbar(
@@ -87,58 +93,30 @@ fun ProductDetailContent(
                 actionLabel = "Dismiss",
                 duration = SnackbarDuration.Short
             )
-            onEvent(ProductDetailEvent.ErrorShown)
+            onIntent(ProductDetailUiIntent.ClearError)
         }
     }
 
     val stockInHistory = remember(uiState.priceHistory) {
-        uiState.priceHistory
-            .filter { it.first.type == TransactionType.STOCK_IN }
+        uiState.priceHistory.filter { it.first.type == TransactionType.STOCK_IN }
             .sortedByDescending { it.first.timestamp }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) onEvent(ProductDetailEvent.ToggleScanner(true))
-    }
+    ) { isGranted -> if (isGranted) onIntent(ProductDetailUiIntent.ToggleScanner(true)) }
 
     if (uiState.showScanner) {
         BarcodeScannerView(
             onBarcodeScanned = { barcode ->
-                onEvent(ProductDetailEvent.BarcodeChanged(barcode))
-                onEvent(ProductDetailEvent.ToggleScanner(false))
+                onIntent(ProductDetailUiIntent.BarcodeChanged(barcode))
+                onIntent(ProductDetailUiIntent.ToggleScanner(false))
             },
-            onClose = { onEvent(ProductDetailEvent.ToggleScanner(false)) }
+            onClose = { onIntent(ProductDetailUiIntent.ToggleScanner(false)) }
         )
         return
     }
 
-//    if (uiState.isSaving) {
-//        Dialog(onDismissRequest = { }) {
-//            Surface(
-//                shape = MaterialTheme.shapes.medium,
-//                color = MaterialTheme.colorScheme.surface,
-//                tonalElevation = 8.dp,
-//                modifier = Modifier
-//                    .fillMaxSize()
-//                    .padding(16.dp)
-//            ) {
-//                Column(
-//                    modifier = Modifier.padding(24.dp),
-//                    horizontalAlignment = Alignment.CenterHorizontally,
-//                    verticalArrangement = Arrangement.Center
-//                ) {
-//                    CircularProgressIndicator()
-//                    Spacer(Modifier.height(16.dp))
-//                    Text(
-//                        text = if (uiState.isEditMode) "Updating product..." else "Saving product...",
-//                        style = MaterialTheme.typography.bodyLarge
-//                    )
-//                }
-//            }
-//        }
-//    }
     if (uiState.isDeleting) {
         Dialog(onDismissRequest = { }) {
             Surface(
@@ -153,14 +131,12 @@ fun ProductDetailContent(
                 ) {
                     CircularProgressIndicator()
                     Spacer(Modifier.height(16.dp))
-                    Text(
-                        text = "Deleting product...",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                    Text(text = "Deleting product...", style = MaterialTheme.typography.bodyLarge)
                 }
             }
         }
     }
+
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -169,8 +145,7 @@ fun ProductDetailContent(
             confirmButton = {
                 Button(
                     onClick = {
-                        onEvent(ProductDetailEvent.DeleteProduct)
-                        showDeleteDialog = false
+                        onIntent(ProductDetailUiIntent.DeleteProduct); showDeleteDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
@@ -178,9 +153,9 @@ fun ProductDetailContent(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -191,16 +166,12 @@ fun ProductDetailContent(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        if (uiState.isEditMode) stringResource(R.string.edit_product)
-                        else stringResource(R.string.add_new_product),
-                        style = MaterialTheme.typography.titleLarge
+                        if (uiState.isEditMode) stringResource(R.string.edit_product) else stringResource(
+                            R.string.add_new_product
+                        ), style = MaterialTheme.typography.titleLarge
                     )
                 },
-                navigationIcon = {
-                    TextButton(onClick = onNavigateBack) {
-                        Text(stringResource(R.string.cancel))
-                    }
-                },
+                navigationIcon = { TextButton(onClick = onNavigateBack) { Text(stringResource(R.string.cancel)) } },
                 actions = {
                     Button(
                         onClick = {
@@ -214,10 +185,7 @@ fun ProductDetailContent(
                                         duration = SnackbarDuration.Short
                                     )
                                 }
-                            } else {
-                                onEvent(ProductDetailEvent.SaveProduct)
-                            }
-
+                            } else onIntent(ProductDetailUiIntent.SaveProduct)
                         },
                         enabled = !uiState.isSaving,
                         modifier = Modifier
@@ -230,14 +198,14 @@ fun ProductDetailContent(
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 strokeWidth = 2.dp
                             )
-                        } else {
-                            Text(stringResource(R.string.save))
-                        }
+                        } else Text(stringResource(R.string.save))
                     }
                 }
             )
         }
     ) { paddingValues ->
+
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -247,27 +215,23 @@ fun ProductDetailContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(scrollState)
-                    .imePadding() // Handles the keyboard height
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .imePadding()
+                    .padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Image Gallery Component
                 ImageGalleryComponent(
                     imagePaths = uiState.imagePaths,
-                    onAddImages = { onEvent(ProductDetailEvent.AddImages(it)) },
-                    onRemoveImage = { onEvent(ProductDetailEvent.RemoveImage(it)) }
-                )
+                    onAddImages = { onIntent(ProductDetailUiIntent.AddImages(it)) },
+                    onRemoveImage = { onIntent(ProductDetailUiIntent.RemoveImage(it)) })
 
-                // Basic Info Section
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    SectionHeader(stringResource(R.string.product_name))
+                    SectionHeader(stringResource(R.string.product_name), isRequired = true)
                     OutlinedTextField(
                         value = uiState.name,
-                        onValueChange = { onEvent(ProductDetailEvent.NameChanged(it)) },
+                        onValueChange = { onIntent(ProductDetailUiIntent.NameChanged(it)) },
                         placeholder = {
                             Text(
                                 text = "e.g. Organic Coffee Beans",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 1.0f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
                         modifier = Modifier
@@ -287,23 +251,21 @@ fun ProductDetailContent(
                         SectionHeader(stringResource(R.string.barcode))
                         OutlinedTextField(
                             value = uiState.barcode,
-                            onValueChange = { onEvent(ProductDetailEvent.BarcodeChanged(it)) },
+                            onValueChange = { onIntent(ProductDetailUiIntent.BarcodeChanged(it)) },
                             trailingIcon = {
-                                IconButton(
-                                    onClick = {
-                                        val permissionCheckResult =
-                                            ContextCompat.checkSelfPermission(
-                                                context, Manifest.permission.CAMERA
-                                            )
-                                        if (permissionCheckResult == PackageManager.PERMISSION_GRANTED) {
-                                            onEvent(ProductDetailEvent.ToggleScanner(true))
-                                        } else {
-                                            permissionLauncher.launch(Manifest.permission.CAMERA)
-                                        }
-                                    },
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan")
+                                IconButton(onClick = {
+                                    if (ContextCompat.checkSelfPermission(
+                                            context,
+                                            Manifest.permission.CAMERA
+                                        ) == PackageManager.PERMISSION_GRANTED
+                                    ) onIntent(ProductDetailUiIntent.ToggleScanner(true)) else permissionLauncher.launch(
+                                        Manifest.permission.CAMERA
+                                    )
+                                }, modifier = Modifier.size(48.dp)) {
+                                    Icon(
+                                        Icons.Default.QrCodeScanner,
+                                        "Scan"
+                                    )
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -311,10 +273,28 @@ fun ProductDetailContent(
                         )
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        SectionHeader(stringResource(R.string.price))
+                        SectionHeader("Min. Stock")
                         OutlinedTextField(
-                            value = uiState.price,
-                            onValueChange = { onEvent(ProductDetailEvent.PriceChanged(it)) },
+                            value = uiState.minStockLevel,
+                            onValueChange = { onIntent(ProductDetailUiIntent.MinStockChanged(it)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 488.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        SectionHeader("Cost Price", isRequired = true)
+                        OutlinedTextField(
+                            value = uiState.costPrice,
+                            onValueChange = { onIntent(ProductDetailUiIntent.CostPriceChanged(it)) },
                             prefix = {
                                 Text(
                                     text = "$ ",
@@ -326,77 +306,91 @@ fun ProductDetailContent(
                             shape = RoundedCornerShape(12.dp)
                         )
                     }
+                    Column(modifier = Modifier.weight(1f)) {
+                        SectionHeader(stringResource(R.string.sell_price), isRequired = true)
+                        OutlinedTextField(
+                            value = uiState.sellPrice,
+                            onValueChange = { onIntent(ProductDetailUiIntent.PriceChanged(it)) },
+                            prefix = {
+                                Text(
+                                    text = "$ ",
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+
                 }
 
-                // Category Section
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    SectionHeader(stringResource(R.string.description))
+                    OutlinedTextField(
+                        value = uiState.description,
+                        onValueChange = { onIntent(ProductDetailUiIntent.DescriptionChanged(it)) },
+                        placeholder = {
+                            Text(
+                                text = "e.g. Premium blend of Arabica and Robusta beans...",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 488.dp)
+                            .heightIn(min = 100.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        minLines = 3
+                    )
+                }
+
                 CategorySection(
                     selectedCategory = uiState.category,
                     categories = uiState.categories,
-                    onCategorySelected = { onEvent(ProductDetailEvent.CategoryChanged(it)) },
-                    onAddCategory = { onEvent(ProductDetailEvent.AddCategory(it)) },
-                    onUpdateCategory = { onEvent(ProductDetailEvent.UpdateCategory(it)) },
-                    onDeleteCategory = { onEvent(ProductDetailEvent.DeleteCategory(it)) }
-                )
+                    isRequired = true,
+                    onCategorySelected = { onIntent(ProductDetailUiIntent.CategoryChanged(it)) },
+                    onAddCategory = { onIntent(ProductDetailUiIntent.AddCategory(it)) },
+                    onUpdateCategory = { onIntent(ProductDetailUiIntent.UpdateCategory(it)) },
+                    onDeleteCategory = { onIntent(ProductDetailUiIntent.DeleteCategory(it)) })
 
-                // Stock Management Section
                 StockManagementSection(
                     currentQty = uiState.currentQty,
                     deltaQty = uiState.editableQty,
                     transactionType = uiState.transactionType,
                     suppliers = uiState.suppliers,
                     selectedSupplier = uiState.selectedSupplier,
-                    onTypeChanged = { onEvent(ProductDetailEvent.TransactionTypeChanged(it)) },
-                    onQtyChanged = { onEvent(ProductDetailEvent.QuantityChanged(it)) },
-                    onSupplierChanged = { onEvent(ProductDetailEvent.SupplierChanged(it)) },
-                    onAddSupplier = { onEvent(ProductDetailEvent.AddSupplier(it)) }
-                )
+                    onTypeChanged = { onIntent(ProductDetailUiIntent.TransactionTypeChanged(it)) },
+                    onQtyChanged = { onIntent(ProductDetailUiIntent.QuantityChanged(it)) },
+                    onSupplierChanged = { onIntent(ProductDetailUiIntent.SupplierChanged(it)) },
+                    onAddSupplier = { onIntent(ProductDetailUiIntent.AddSupplier(it)) })
 
-
-                if (uiState.transactionType == TransactionType.STOCK_IN &&
-                    uiState.isEditMode && stockInHistory.isNotEmpty()
-                ) {
-
+                if (uiState.transactionType == TransactionType.STOCK_IN && uiState.isEditMode && stockInHistory.isNotEmpty()) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = stringResource(R.string.stock_in_history),
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                            modifier = Modifier
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )
-
-                        TextButton(onClick = { showHistorySheet = true }) {
-                            Text(stringResource(R.string.view_all))
-                        }
+                        TextButton(onClick = {
+                            showHistorySheet = true
+                        }) { Text(stringResource(R.string.view_all)) }
                     }
-//                    PriceHistoryTable(
-//                        displayHistory = stockInHistory.take(1),
-//                        fullHistory = stockInHistory
-//                    )
                     val latestHistory = stockInHistory.first()
-                    StockHistoryCard(
-                        latestHistory.first,
-                        latestHistory.second
-                    )
-
-
+                    StockHistoryCard(latestHistory.first, latestHistory.second)
                 }
+
                 if (uiState.isEditMode) {
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
+                    Spacer(modifier = Modifier.height(12.dp))
                     TextButton(
                         onClick = { showDeleteDialog = true },
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = stringResource(R.string.delete_product)
-                        )
+                        Icon(Icons.Default.Delete, stringResource(R.string.delete_product))
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.delete_product))
                     }
@@ -424,7 +418,10 @@ fun ProductDetailContent(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             items(stockInHistory) { (transaction, item) ->
-                                StockHistoryCard(transaction, item)
+                                StockHistoryCard(
+                                    transaction,
+                                    item
+                                )
                             }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
@@ -432,27 +429,28 @@ fun ProductDetailContent(
                 }
             }
 
-            if (uiState.isSaving) {
-                Surface(
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 8.dp,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(8.dp)
+
+        }
+        if (uiState.isSaving) {
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(16.dp))
-                        Text(
-                            text = if (uiState.isEditMode) "Updating product..." else "Saving product...",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        text = if (uiState.isEditMode) "Updating product..." else "Saving product...",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
             }
         }
@@ -460,15 +458,25 @@ fun ProductDetailContent(
 }
 
 @Composable
-fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium.copy(
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        ),
-        modifier = Modifier.padding(bottom = 4.dp)
-    )
+fun SectionHeader(title: String, isRequired: Boolean = false) {
+    Row(modifier = Modifier.padding(bottom = 4.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        )
+        if (isRequired) {
+            Text(
+                text = " *",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error
+                )
+            )
+        }
+    }
 }
 
 @Composable
@@ -477,27 +485,23 @@ fun ImageGalleryComponent(
     onAddImages: (List<String>) -> Unit,
     onRemoveImage: (String) -> Unit
 ) {
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents()
-    ) { uris ->
-        onAddImages(uris.map { it.toString() })
-    }
-
+    val launcher =
+        rememberLauncherForActivityResult(contract = ActivityResultContracts.GetMultipleContents()) { uris ->
+            onAddImages(uris.map { it.toString() })
+        }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(200.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Primary Image
         Box(
             modifier = Modifier
                 .weight(2f)
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable { launcher.launch("image/*") }
-        ) {
+                .clickable { launcher.launch("image/*") }) {
             if (imagePaths.isNotEmpty()) {
                 AsyncImage(
                     model = imagePaths[0],
@@ -515,7 +519,7 @@ fun ImageGalleryComponent(
                 ) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Remove",
+                        "Remove",
                         tint = Color.White,
                         modifier = Modifier.size(16.dp)
                     )
@@ -528,7 +532,7 @@ fun ImageGalleryComponent(
                 ) {
                     Icon(
                         Icons.Default.AddPhotoAlternate,
-                        contentDescription = stringResource(R.string.add_photo),
+                        stringResource(R.string.add_photo),
                         modifier = Modifier.size(48.dp)
                     )
                     Text(
@@ -538,8 +542,6 @@ fun ImageGalleryComponent(
                 }
             }
         }
-
-        // Thumbnails
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -554,8 +556,7 @@ fun ImageGalleryComponent(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable { launcher.launch("image/*") }
-                ) {
+                        .clickable { launcher.launch("image/*") }) {
                     if (imageIndex < imagePaths.size) {
                         AsyncImage(
                             model = imagePaths[imageIndex],
@@ -573,19 +574,17 @@ fun ImageGalleryComponent(
                         ) {
                             Icon(
                                 Icons.Default.Close,
-                                contentDescription = "Remove",
+                                "Remove",
                                 tint = Color.White,
                                 modifier = Modifier.size(12.dp)
                             )
                         }
-                    } else {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = stringResource(R.string.add_photo),
-                            modifier = Modifier.align(Alignment.Center),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                    }
+                    } else Icon(
+                        Icons.Default.Add,
+                        stringResource(R.string.add_photo),
+                        modifier = Modifier.align(Alignment.Center),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
                 }
             }
         }
@@ -604,11 +603,7 @@ fun StockManagementSection(
     onSupplierChanged: (SupplierModel?) -> Unit,
     onAddSupplier: (SupplierModel) -> Unit
 ) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-
-        shape = RoundedCornerShape(16.dp)
-    ) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
         Column(
             modifier = Modifier.padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -625,29 +620,27 @@ fun StockManagementSection(
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }
-
-                // Segmented Button replacement (Simplified with AssistChip-like logic)
                 Row(
                     modifier = Modifier
                         .wrapContentSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                        .toggleable(
+                            value = transactionType == TransactionType.STOCK_IN,
+                            onValueChange = {},
+                            role = Role.RadioButton
+                        )
                         .padding(4.dp)
                 ) {
                     StockTypeButton(
                         text = stringResource(R.string.`in`),
                         isSelected = transactionType == TransactionType.STOCK_IN,
-                        onClick = { onTypeChanged(TransactionType.STOCK_IN) }
-                    )
-                    if (currentQty > 0) {
-                        StockTypeButton(
-                            text = stringResource(R.string.out),
-                            isSelected = transactionType == TransactionType.STOCK_OUT,
-                            onClick = { onTypeChanged(TransactionType.STOCK_OUT) }
-                        )
-                    }
+                        onClick = { onTypeChanged(TransactionType.STOCK_IN) })
+                    if (currentQty > 0) StockTypeButton(
+                        text = stringResource(R.string.out),
+                        isSelected = transactionType == TransactionType.STOCK_OUT,
+                        onClick = { onTypeChanged(TransactionType.STOCK_OUT) })
                 }
             }
-
-            // Quantity Stepper
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -657,22 +650,18 @@ fun StockManagementSection(
             ) {
                 IconButton(
                     onClick = {
-                        val current = deltaQty.toIntOrNull() ?: 0
-                        onQtyChanged((current - 1).coerceAtLeast(0).toString())
+                        val current = deltaQty.toIntOrNull() ?: 0; onQtyChanged(
+                        (current - 1).coerceAtLeast(0).toString()
+                    )
                     },
                     modifier = Modifier
                         .size(48.dp)
                         .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-                ) {
-                    Icon(Icons.Default.Remove, contentDescription = "Minus")
-                }
-
+                ) { Icon(Icons.Default.Remove, "Minus") }
                 TextField(
                     value = deltaQty,
                     onValueChange = { if (it.all { char -> char.isDigit() }) onQtyChanged(it) },
-                    textStyle = MaterialTheme.typography.headlineMedium.copy(
-                        textAlign = TextAlign.Center
-                    ),
+                    textStyle = MaterialTheme.typography.headlineMedium.copy(textAlign = TextAlign.Center),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -685,42 +674,31 @@ fun StockManagementSection(
                         .widthIn(min = 80.dp, max = 120.dp)
                         .padding(horizontal = 8.dp)
                 )
-
                 IconButton(
                     onClick = {
-                        val current = deltaQty.toIntOrNull() ?: 0
-                        if (transactionType == TransactionType.STOCK_IN) {
-                            onQtyChanged((current + 1).toString())
-                        } else {
-
-                            if ((current + 1) <= currentQty) {
-                                onQtyChanged((current + 1).toString())
-                            }
-                        }
+                        val current = deltaQty.toIntOrNull()
+                            ?: 0; if (transactionType == TransactionType.STOCK_IN) onQtyChanged((current + 1).toString()) else if ((current + 1) <= currentQty) onQtyChanged(
+                        (current + 1).toString()
+                    )
                     },
                     modifier = Modifier
                         .size(48.dp)
                         .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Plus")
-                }
+                ) { Icon(Icons.Default.Add, "Plus") }
             }
-
-            if (transactionType == TransactionType.STOCK_IN) {
-                SupplierDropdown(
-                    selectedSupplier = selectedSupplier,
-                    suppliers = suppliers,
-                    onSupplierAdded = { name, contact ->
-                        onAddSupplier(
-                            SupplierModel(
-                                name = name,
-                                contact = contact
-                            )
+            if (transactionType == TransactionType.STOCK_IN) SupplierDropdown(
+                selectedSupplier = selectedSupplier,
+                suppliers = suppliers,
+                onSupplierAdded = { name, contact ->
+                    onAddSupplier(
+                        SupplierModel(
+                            name = name,
+                            contact = contact
                         )
-                    },
-                    onSupplierSelected = onSupplierChanged
-                )
-            }
+                    )
+                },
+                onSupplierSelected = onSupplierChanged
+            )
         }
     }
 }
@@ -732,7 +710,7 @@ fun StockTypeButton(text: String, isSelected: Boolean, onClick: () -> Unit) {
             .clip(CircleShape)
             .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
             .clickable { onClick() }
-            .padding(horizontal = 24.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -747,7 +725,6 @@ fun StockTypeButton(text: String, isSelected: Boolean, onClick: () -> Unit) {
 fun StockHistoryCard(transaction: TransactionModel, item: TransactionItemModel) {
     val sdf = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
     val dateStr = sdf.format(Date(transaction.timestamp))
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -764,11 +741,8 @@ fun StockHistoryCard(transaction: TransactionModel, item: TransactionItemModel) 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = when (transaction.type) {
-                        TransactionType.STOCK_IN -> "Stock In / Restock / Update"
-                        TransactionType.STOCK_OUT -> "Stock Out / Sale"
-                        else -> "Adjustment"
-                    },
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
+                        TransactionType.STOCK_IN -> "Stock In / Restock / Update"; TransactionType.STOCK_OUT -> "Stock Out / Sale"; else -> "Adjustment"
+                    }, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(
                     dateStr,
@@ -776,16 +750,13 @@ fun StockHistoryCard(transaction: TransactionModel, item: TransactionItemModel) 
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-
             Column(horizontalAlignment = Alignment.End) {
-                val prefix = if (transaction.type == TransactionType.STOCK_IN) "+" else "-"
                 val color =
                     if (transaction.type == TransactionType.STOCK_IN) Color(0xFF2E7D32) else Color(
                         0xFFC62828
                     )
-
                 Text(
-                    text = "$prefix${item.quantity}",
+                    text = "${if (transaction.type == TransactionType.STOCK_IN) "+" else "-"}${item.quantity}",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         color = color
@@ -808,6 +779,7 @@ fun StockHistoryCard(transaction: TransactionModel, item: TransactionItemModel) 
 fun CategorySection(
     selectedCategory: CategoryModel,
     categories: List<CategoryModel>,
+    isRequired: Boolean = false,
     onCategorySelected: (CategoryModel) -> Unit,
     onAddCategory: (CategoryModel) -> Unit,
     onUpdateCategory: (CategoryModel) -> Unit,
@@ -821,32 +793,23 @@ fun CategorySection(
 
     LaunchedEffect(editingCategory) {
         if (editingCategory != null) {
-            categoryName = editingCategory!!.name
-            selectedEmoji = editingCategory!!.icon
+            categoryName = editingCategory!!.name; selectedEmoji = editingCategory!!.icon
         } else {
-            categoryName = ""
-            selectedEmoji = "📦"
+            categoryName = ""; selectedEmoji = "📦"
         }
     }
 
-    val emojis = listOf(
-        "📦", "🍎", "🍔", "🥤",
-        "🍦", "👕", "📱", "🏠",
-        "🛠️", "📚", "🎮", "💊",
-        "🧼", "💄", "👟", "⌚",
-        "⚡"
-    )
+    val emojis =
+        listOf("📦", "🍎", "🍔", "🥤", "🍦", "👕", "📱", "🏠", "🛠️", "📚", "🎮", "💊", "🧼", "💄", "👟", "⌚", "⚡")
 
     if (showDialog) {
         AlertDialog(
-            onDismissRequest = {
-                showDialog = false
-                editingCategory = null
-            },
+            onDismissRequest = { showDialog = false; editingCategory = null },
             title = {
                 Text(
-                    if (editingCategory != null) stringResource(R.string.edit_category)
-                    else stringResource(R.string.new_category)
+                    if (editingCategory != null) stringResource(R.string.edit_category) else stringResource(
+                        R.string.new_category
+                    )
                 )
             },
             text = {
@@ -858,9 +821,7 @@ fun CategorySection(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-
                     Text("Select Icon:", style = MaterialTheme.typography.bodyMedium)
-
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(4),
                         modifier = Modifier.height(160.dp),
@@ -890,23 +851,20 @@ fun CategorySection(
             confirmButton = {
                 Button(onClick = {
                     if (categoryName.isNotBlank()) {
-                        if (editingCategory != null) {
-                            onUpdateCategory(
-                                editingCategory!!.copy(
-                                    name = categoryName,
-                                    icon = selectedEmoji
-                                )
+                        if (editingCategory != null) onUpdateCategory(
+                            editingCategory!!.copy(
+                                name = categoryName,
+                                icon = selectedEmoji
                             )
-                        } else {
-                            onAddCategory(CategoryModel(name = categoryName, icon = selectedEmoji))
-                        }
-                        showDialog = false
-                        editingCategory = null
+                        )
+                        else onAddCategory(CategoryModel(name = categoryName, icon = selectedEmoji))
+                        showDialog = false; editingCategory = null
                     }
                 }) {
                     Text(
-                        if (editingCategory != null) stringResource(R.string.save)
-                        else stringResource(R.string.add)
+                        if (editingCategory != null) stringResource(R.string.save) else stringResource(
+                            R.string.add
+                        )
                     )
                 }
             }
@@ -914,7 +872,7 @@ fun CategorySection(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        SectionHeader(stringResource(R.string.category))
+        SectionHeader(stringResource(R.string.category), isRequired = isRequired)
         ExposedDropdownMenuBox(
             expanded = expanded,
             onExpandedChange = { expanded = !expanded },
@@ -942,33 +900,28 @@ fun CategorySection(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(category.icon)
-                                Text(category.name)
-                            }
+                            ) { Text(category.icon); Text(category.name) }
                         },
-                        onClick = {
-                            onCategorySelected(category)
-                            expanded = false
-                        },
+                        onClick = { onCategorySelected(category); expanded = false },
                         trailingIcon = {
                             Row {
-                                IconButton(onClick = {
-                                    editingCategory = category
-                                    showDialog = true
-                                    expanded = false
-                                }) {
-                                    Icon(
-                                        Icons.Default.Edit,
-                                        contentDescription = "Edit Category",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                                if (category != DefaultData.defaultCategory){
+                                    IconButton(onClick = {
+                                        editingCategory = category; showDialog = true; expanded =
+                                        false
+                                    }) {
+                                        Icon(
+                                            Icons.Default.Edit,
+                                            "Edit Category",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
                                 IconButton(onClick = { onDeleteCategory(category) }) {
                                     Icon(
                                         Icons.Default.Delete,
-                                        contentDescription = "Delete Category",
+                                        "Delete Category",
                                         tint = MaterialTheme.colorScheme.error,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -978,18 +931,12 @@ fun CategorySection(
                     )
                 }
                 HorizontalDivider()
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            "+ Add New Category",
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    onClick = {
-                        showDialog = true
-                        expanded = false
-                    }
-                )
+                DropdownMenuItem(text = {
+                    Text(
+                        "+ Add New Category",
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }, onClick = { showDialog = true; expanded = false })
             }
         }
     }
@@ -1027,8 +974,7 @@ fun SupplierDropdown(
             confirmButton = {
                 Button(onClick = {
                     if (newSupplierName.isNotBlank()) {
-                        onSupplierAdded(newSupplierName, newSupplierContact)
-                        showDialog = false
+                        onSupplierAdded(newSupplierName, newSupplierContact); showDialog = false
                     }
                 }) { Text("Add") }
             }
@@ -1052,8 +998,7 @@ fun SupplierDropdown(
                 .menuAnchor()
                 .fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            leadingIcon = { Icon(Icons.Default.Business, contentDescription = null) }
-        )
+            leadingIcon = { Icon(Icons.Default.Business, null) })
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
                 text = { Text("None") },
@@ -1074,122 +1019,31 @@ fun SupplierDropdown(
     }
 }
 
-@Composable
-fun PriceHistoryTable(
-    displayHistory: List<Pair<TransactionModel, TransactionItemModel>>,
-    fullHistory: List<Pair<TransactionModel, TransactionItemModel>>
-) {
-
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .widthIn(max = 488.dp)
-            .border(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant,
-                RoundedCornerShape(12.dp)
-            )
-            .clip(RoundedCornerShape(12.dp))
-    ) {
-        // Table Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                .padding(12.dp)
-        ) {
-            Text(
-                text = "Date",
-                modifier = Modifier.weight(1.5f),
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-            )
-            Text(
-                text = "Qty",
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                textAlign = TextAlign.End
-            )
-            Text(
-                text = "Cost",
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                textAlign = TextAlign.End
-            )
-        }
-
-        displayHistory.forEach { (transaction, item) ->
-            val sdf = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-            val dateStr = sdf.format(Date(transaction.timestamp))
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = dateStr,
-                    modifier = Modifier.weight(1.5f),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = item.quantity.toString(),
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.End
-                )
-                Text(
-                    text = "$${item.priceAtTime}",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    ),
-                    textAlign = TextAlign.End
-                )
-            }
-        }
-    }
-}
-
-@Preview(showBackground = true, heightDp = 2000, widthDp = 800)
-@Preview(
-    showBackground = true,
-    heightDp = 2000,
-    widthDp = 800,
-    uiMode = Configuration.UI_MODE_NIGHT_YES
-)
+@Preview(showBackground = true)
 @Composable
 fun ProductDetailPreview() {
-    SMETheme() {
+    SMETheme {
         ProductDetailContent(
             uiState = ProductDetailUiState(
                 name = "Test Product",
                 barcode = "123456789",
-                price = "99.99",
+                sellPrice = "99.99",
                 currentQty = 50,
                 editableQty = "5",
                 isEditMode = true,
-                categories = listOf(
-                    CategoryModel(name = "Test Category", icon = "📦"),
-                ),
+                categories = listOf(CategoryModel(name = "Test Category", icon = "📦")),
                 priceHistory = listOf(
                     Pair(
                         TransactionModel(
                             type = TransactionType.STOCK_IN,
                             timestamp = System.currentTimeMillis()
-                        ),
-                        TransactionItemModel(
-                            quantity = 10,
-                            priceAtTime = 100.0
-                        )
+                        ), TransactionItemModel(quantity = 10, priceAtTime = 100.0)
                     )
                 )
             ),
-            onEvent = {},
-            onNavigateBack = {}
+            onIntent = {},
+            onNavigateBack = {},
+            snackbarHostState = SnackbarHostState()
         )
     }
 }

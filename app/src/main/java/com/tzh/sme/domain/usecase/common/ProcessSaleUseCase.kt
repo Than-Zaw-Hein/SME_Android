@@ -1,4 +1,4 @@
-package com.tzh.sme.domain.usecase
+package com.tzh.sme.domain.usecase.common
 
 import com.tzh.sme.data.model.TransactionModel
 import com.tzh.sme.data.model.TransactionItemModel
@@ -12,7 +12,9 @@ class ProcessSaleUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(
         cartItems: List<CartItem>,
-        discount: Double = 0.0
+        discount: Double = 0.0,
+        sellerId: String? = null,
+        sellerName: String? = null
     ): Result<Pair<TransactionModel, List<TransactionItemModel>>> {
         if (cartItems.isEmpty()) return Result.failure(Exception("Cart is empty"))
 
@@ -23,7 +25,9 @@ class ProcessSaleUseCase @Inject constructor(
                 type = TransactionType.SALE,
                 totalAmount = totalAmount,
                 discount = discount,
-                netAmount = netAmount
+                netAmount = netAmount,
+                userId = sellerId,
+                userName = sellerName
             )
 
             val items = cartItems.map { cartItem ->
@@ -32,7 +36,7 @@ class ProcessSaleUseCase @Inject constructor(
                     productId = cartItem.product.id,
                     productName = cartItem.product.name,
                     quantity = cartItem.quantity,
-                    priceAtTime = cartItem.product.price
+                    priceAtTime = cartItem.product.sellPrice
                 )
             }
 

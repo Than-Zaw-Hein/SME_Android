@@ -1,5 +1,10 @@
 package com.tzh.sme.ui.auth
 
+import android.app.Activity
+import android.content.Intent
+import android.util.Patterns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,16 +17,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tzh.sme.R
 import kotlinx.coroutines.launch
 
@@ -31,93 +37,30 @@ fun SignupScreen(
     onSignupSuccess: () -> Unit,
     onNavigateToLogin: () -> Unit
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
+    var shopName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-    var verificationCode by remember { mutableStateOf("") }
-    var showVerificationDialog by remember { mutableStateOf(false) }
-    var resendCountdown by remember { mutableIntStateOf(0) }
-    
-    val uiState by viewModel.effect.collectAsState(AuthUiState.Idle)
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    var latitude by remember { mutableStateOf<Double?>(null) }
+    var longitude by remember { mutableStateOf<Double?>(null) }
 
-    LaunchedEffect(uiState) {
-        if (uiState is AuthUiState.Error) {
-            snackbarHostState.showSnackbar((uiState as AuthUiState.Error).message)
-        } else if (uiState is AuthUiState.Success) {
-            val message = (uiState as AuthUiState.Success).message
-            snackbarHostState.showSnackbar(message)
-            if (message.contains("Verification code sent")) {
-                showVerificationDialog = true
-                resendCountdown = 60
+    LaunchedEffect(viewModel.sideEffect) {
+        viewModel.sideEffect.collect { effect ->
+            when (effect) {
+                is AuthUiSideEffect.Error -> snackbarHostState.showSnackbar(effect.message)
+                is AuthUiSideEffect.Success -> snackbarHostState.showSnackbar(effect.message)
+                AuthUiSideEffect.VerificationPending -> {}
+                AuthUiSideEffect.NavigateBack -> {}
             }
         }
-    }
-
-    LaunchedEffect(resendCountdown) {
-        if (resendCountdown > 0) {
-            kotlinx.coroutines.delay(1000)
-            resendCountdown -= 1
-        }
-    }
-
-    if (showVerificationDialog) {
-        AlertDialog(
-            onDismissRequest = { showVerificationDialog = false },
-            title = { Text("Verify Email") },
-            text = {
-                Column {
-                    Text("Please enter the verification code sent to $email")
-                    Spacer(Modifier.height(16.dp))
-                    OutlinedTextField(
-                        value = verificationCode,
-                        onValueChange = { verificationCode = it },
-                        label = { Text("Verification Code") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    TextButton(
-                        onClick = {
-                            if (email.isNotBlank()) {
-                                viewModel.sendVerificationCode(email)
-                            } else {
-                                scope.launch { snackbarHostState.showSnackbar("Email cannot be empty") }
-                            }
-                        },
-                        modifier = Modifier.align(Alignment.End),
-                        enabled = uiState !is AuthUiState.Loading && resendCountdown == 0 && email.isNotBlank()
-                    ) {
-                        Text(
-                            if (resendCountdown > 0) "Resend Code ($resendCountdown s)"
-                            else "Resend Code"
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.verifyCode(email, verificationCode) {
-                            showVerificationDialog = false
-                            viewModel.signUp(name, phone, address, email, password, onSignupSuccess)
-                        }
-                    },
-                    enabled = verificationCode.length == 6
-                ) {
-                    Text("Verify")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showVerificationDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 
     Scaffold(
@@ -173,11 +116,58 @@ fun SignupScreen(
             Spacer(Modifier.height(16.dp))
 
             MandatoryTextField(
+                value = shopName,
+                onValueChange = { shopName = it },
+                label = "Shop Name",
+                leadingIcon = Icons.Default.Business
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            val locationLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                if (result.resultCode == Activity.RESULT_OK) {
+                    latitude = result.data?.getDoubleExtra("latitude", 0.0)
+                    longitude = result.data?.getDoubleExtra("longitude", 0.0)
+                }
+            }
+
+            OutlinedButton(
+                onClick = {
+                    val intent = Intent(context, LocationPickerActivity::class.java).apply {
+                        latitude?.let { putExtra("latitude", it) }
+                        longitude?.let { putExtra("longitude", it) }
+                    }
+                    locationLauncher.launch(intent)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.LocationOn, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (latitude != null) "Location Picked" else "Pick Location on Map")
+            }
+
+            if (latitude != null && longitude != null) {
+                Text(
+                    "Selected: ${String.format(java.util.Locale.US, "%.5f, %.5f", latitude, longitude)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            MandatoryTextField(
                 value = email,
                 onValueChange = { email = it },
                 label = stringResource(R.string.email),
                 leadingIcon = Icons.Default.Email,
-                keyboardType = KeyboardType.Email
+                keyboardType = KeyboardType.Email,
+                isError = !email.matches(Patterns.EMAIL_ADDRESS.toRegex()),
+                supportingText = if (email.isNotEmpty() && !email.matches(Patterns.EMAIL_ADDRESS.toRegex())) {
+                    { Text("Invalid email format", color = MaterialTheme.colorScheme.error) }
+                } else null
             )
 
             Spacer(Modifier.height(16.dp))
@@ -197,30 +187,41 @@ fun SignupScreen(
                 onValueChange = { confirmPassword = it },
                 label = "Confirm Password",
                 leadingIcon = Icons.Default.Lock,
-                isPassword = true
+                isPassword = true,
+                supportingText = if (confirmPassword.isNotEmpty() && password != confirmPassword) {
+                    { Text("Password and confirm password do not match.", color = MaterialTheme.colorScheme.error) }
+                } else null,
+                isError = confirmPassword.isNotEmpty() && password != confirmPassword
             )
 
             Spacer(Modifier.height(24.dp))
 
             Button(
-                onClick = { 
-                    if (name.isBlank() || phone.isBlank() || address.isBlank() || email.isBlank() || password.isBlank()) {
+                onClick = {
+                    if (name.isBlank() || phone.isBlank() || address.isBlank() || shopName.isBlank() || email.isBlank() || password.isBlank()) {
                         scope.launch { snackbarHostState.showSnackbar("Please fill all mandatory fields") }
                     } else if (password != confirmPassword) {
                         scope.launch { snackbarHostState.showSnackbar("Passwords do not match") }
                     } else if (password.length < 6) {
                         scope.launch { snackbarHostState.showSnackbar("Password must be at least 6 characters") }
                     } else {
-                        viewModel.sendVerificationCode(email)
+                        viewModel.sendIntent(
+                            AuthUiIntent.SignUp(
+                                name, phone, address, email, password, shopName, latitude, longitude, onSignupSuccess
+                            )
+                        )
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = uiState !is AuthUiState.Loading
+                enabled = !uiState.isLoading
             ) {
-                if (uiState is AuthUiState.Loading) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
                 } else {
-                    Text("Request Verification Code")
+                    Text("Sign Up")
                 }
             }
 
@@ -233,7 +234,6 @@ fun SignupScreen(
     }
 }
 
-
 @Composable
 fun MandatoryTextField(
     value: String,
@@ -241,7 +241,9 @@ fun MandatoryTextField(
     label: String,
     leadingIcon: androidx.compose.ui.graphics.vector.ImageVector,
     isPassword: Boolean = false,
-    keyboardType: KeyboardType = KeyboardType.Text
+    keyboardType: KeyboardType = KeyboardType.Text,
+    isError: Boolean = false,
+    supportingText: @Composable (() -> Unit)? = null
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
 
@@ -267,9 +269,11 @@ fun MandatoryTextField(
                 }
             }
         },
-        visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         modifier = Modifier.fillMaxWidth(),
-        singleLine = true
+        singleLine = true,
+        supportingText = supportingText,
+        isError = isError
     )
 }

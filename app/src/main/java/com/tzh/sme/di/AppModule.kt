@@ -8,7 +8,8 @@ import com.google.firebase.firestore.PersistentCacheSettings
 import com.google.firebase.firestore.firestoreSettings
 import com.google.firebase.storage.FirebaseStorage
 import com.google.gson.Gson
-import com.tzh.sme.data.remote.BASE_URL
+import com.tzh.sme.BuildConfig
+import com.tzh.sme.BuildConfig.FILE_SERVER_URL
 import com.tzh.sme.data.remote.FileApiService
 import dagger.Module
 import dagger.Provides
@@ -47,8 +48,15 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideFirebaseStorage() =
-        FirebaseStorage.getInstance("gs://smeandorid.firebasestorage.app")
+    fun provideFirebaseStorage(): FirebaseStorage {
+        val storage = FirebaseStorage.getInstance()
+        // Set max retry time to 60 seconds. This ensures that if a session is terminated
+        // or gets stuck, it has enough time to recover, but still fails fast enough 
+        // for our repository's retry logic to kick in if it's a terminal error.
+        storage.maxUploadRetryTimeMillis = 60000
+        storage.maxOperationRetryTimeMillis = 60000
+        return storage
+    }
 
     @Provides
     @Singleton
@@ -63,10 +71,13 @@ object AppModule {
     @Provides
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
+        val loggingLevel = if (BuildConfig.DEBUG) {
+            HttpLoggingInterceptor.Level.BODY
+        } else {
+            HttpLoggingInterceptor.Level.NONE
+        }
         return OkHttpClient.Builder()
-            .addInterceptor(HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
-            })
+            .addInterceptor(HttpLoggingInterceptor().apply { level = loggingLevel })
             .build()
     }
 
@@ -75,7 +86,7 @@ object AppModule {
     fun provideFileApiService(okHttpClient: OkHttpClient): FileApiService {
 
         return Retrofit.Builder()
-            .baseUrl(BASE_URL)
+            .baseUrl(BuildConfig.FILE_SERVER_URL)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

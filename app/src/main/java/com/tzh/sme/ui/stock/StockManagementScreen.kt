@@ -2,6 +2,7 @@ package com.tzh.sme.ui.stock
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -10,29 +11,28 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.material.icons.filled.QrCode
-import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.filled.Notes
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.tzh.sme.BuildConfig
 import com.tzh.sme.R
-import com.tzh.sme.data.remote.BASE_URL
 import com.tzh.sme.ui.inventory.BarcodeScannerView
-import com.tzh.sme.ui.pos.PosUiState
-import androidx.compose.material.icons.automirrored.filled.Notes
+import com.tzh.sme.ui.pos.CategoryList
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,138 +43,207 @@ fun StockManagementScreen(
     onNavigateToEditProduct: (String) -> Unit,
     onOpenDrawer: () -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) viewModel.onStockEvent(StockEvent.OnToggleScanner(true))
-    }
+    ) { isGranted -> if (isGranted) viewModel.sendIntent(StockUiIntent.ToggleScanner(true)) }
 
-    if (uiState.showScanner) {
-        BarcodeScannerView(
-            onBarcodeScanned = { barcode ->
-                viewModel.onStockEvent(StockEvent.OnBarcodeScanned(barcode))
-            },
-            onClose = { viewModel.onStockEvent(StockEvent.OnToggleScanner(false)) }
-        )
-        return
-    }
+
 
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.windowInsetsPadding(
+                    WindowInsets.safeDrawing.only(
+                        WindowInsetsSides.Horizontal
+                    )
+                ),
                 title = {
-                    Text(stringResource(R.string.stock_management))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isLandscape) {
+                            Column {
+                                stringResource(R.string.stock_management).split(" ").forEach {
+                                    Text(
+                                        it,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            lineHeight = 16.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+                            }
+                            DockedSearchBar(
+                                inputField = {
+                                    SearchBarDefaults.InputField(
+                                        query = uiState.searchQuery,
+                                        onQueryChange = {
+                                            viewModel.sendIntent(
+                                                StockUiIntent.UpdateSearchQuery(
+                                                    it
+                                                )
+                                            )
+                                        },
+                                        onSearch = {}, expanded = false, onExpandedChange = {},
+                                        placeholder = { Text("Search by name or barcode") },
+                                        leadingIcon = { Icon(Icons.Default.Search, null) },
+                                    )
+                                },
+                                expanded = false, onExpandedChange = {},
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(start = 8.dp),
+                            ) {}
+                            Spacer(Modifier.width(8.dp))
+                            IconButton(onClick = {
+                                if (ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.CAMERA
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    viewModel.sendIntent(StockUiIntent.ToggleScanner(true))
+                                } else permissionLauncher.launch(Manifest.permission.CAMERA)
+                            }) { Icon(Icons.Default.QrCodeScanner, "Scan Barcode") }
+                        } else {
+                            Text(stringResource(R.string.stock_management))
+                        }
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = onOpenDrawer) {
                         Icon(
                             Icons.AutoMirrored.Filled.Notes,
-                            contentDescription = "Menu"
+                            "Menu"
                         )
                     }
                 }
             )
         },
-        floatingActionButton = {
-            FloatingActionButton(onClick = onNavigateToAddProduct) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_product))
-            }
-        }
     ) { padding ->
-        Box(
-            modifier = Modifier
-                .padding(padding)
-                .padding(horizontal = 12.dp)
-                .fillMaxSize()
-        ) {
-            if (uiState.isLoading) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            } else if (uiState.error != null) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(uiState.error!!)
-                }
-            } else {
-                if (uiState.products.isEmpty() && uiState.searchQuery.isEmpty()) {
-                    EmptyStockState(onAddClick = onNavigateToAddProduct)
+
+        if (uiState.showScanner) {
+            BarcodeScannerView(
+                onBarcodeScanned = { barcode ->
+                    viewModel.sendIntent(
+                        StockUiIntent.BarcodeScanned(
+                            barcode
+                        )
+                    )
+                },
+                modifier = Modifier
+                    .padding(padding),
+                onClose = { viewModel.sendIntent(StockUiIntent.ToggleScanner(false)) }
+            )
+
+        } else {
+
+            Box(
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp)
+            ) {
+                if (uiState.isLoading) {
+                    Box(
+                        Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) { CircularProgressIndicator() }
+                } else if (uiState.error != null) {
+                    Box(
+                        Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) { Text(uiState.error!!) }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 80.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        item {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        if (!isLandscape) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 DockedSearchBar(
                                     inputField = {
                                         SearchBarDefaults.InputField(
                                             query = uiState.searchQuery,
-                                            onQueryChange = { viewModel.onStockEvent(StockEvent.OnSearchQueryChange(it)) },
+                                            onQueryChange = {
+                                                viewModel.sendIntent(
+                                                    StockUiIntent.UpdateSearchQuery(
+                                                        it
+                                                    )
+                                                )
+                                            },
                                             onSearch = {},
                                             expanded = false,
                                             onExpandedChange = {},
                                             placeholder = { Text("Search by name or barcode") },
-                                            leadingIcon = {
-                                                Icon(
-                                                    Icons.Default.Search,
-                                                    contentDescription = null
-                                                )
-                                            },
+                                            leadingIcon = { Icon(Icons.Default.Search, null) },
                                         )
                                     },
-                                    expanded = false,
-                                    onExpandedChange = {},
+                                    expanded = false, onExpandedChange = {},
                                     modifier = Modifier.weight(1f),
                                 ) {}
-
                                 Spacer(Modifier.width(12.dp))
                                 IconButton(onClick = {
-                                    val permissionCheckResult =
-                                        ContextCompat.checkSelfPermission(
+                                    if (ContextCompat.checkSelfPermission(
                                             context,
                                             Manifest.permission.CAMERA
-                                        )
-                                    if (permissionCheckResult == PackageManager.PERMISSION_GRANTED) {
-                                        viewModel.onStockEvent(StockEvent.OnToggleScanner(true))
+                                        ) == PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        viewModel.sendIntent(StockUiIntent.ToggleScanner(true))
+                                    } else permissionLauncher.launch(Manifest.permission.CAMERA)
+                                }) { Icon(Icons.Default.QrCodeScanner, "Scan Barcode") }
+                            }
+                        }
+                        CategoryList(
+                            categories = uiState.categories,
+                            selectedCategory = uiState.selectedCategory,
+                            onCategorySelect = {
+                                viewModel.sendIntent(
+                                    StockUiIntent.SelectCategory(it)
+                                )
+                            },
+                        )
 
-                                    } else {
-                                        permissionLauncher.launch(Manifest.permission.CAMERA)
-                                    }
-                                }) {
-                                    Icon(
-                                        Icons.Default.QrCodeScanner,
-                                        contentDescription = "Scan Barcode"
-                                    )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        if (uiState.products.isEmpty() && uiState.searchQuery.isEmpty()) {
+                            EmptyStockState(onAddClick = onNavigateToAddProduct)
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(bottom = 80.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                items(uiState.products) { product ->
+                                    val firstImage = product.imagePaths.firstOrNull()
+                                        ?.let { if (it.startsWith("http")) it else BuildConfig.FILE_SERVER_URL + it }
+                                    StockItemCard(
+                                        name = product.name,
+                                        qty = product.quantity,
+                                        price = product.sellPrice,
+                                        barcode = product.barcode,
+                                        imagePath = firstImage,
+                                        minStock = product.minStockLevel,
+                                        onClick = { onNavigateToEditProduct(product.id) })
                                 }
                             }
                         }
-
-                        items(uiState.products) { product ->
-                            val firstImage = product.imagePaths.firstOrNull()?.let { path ->
-                                if (path.startsWith("http")) path else BASE_URL + path
-                            }
-                            StockItemCard(
-                                name = product.name,
-                                qty = product.quantity,
-                                price = product.price,
-                                barcode = product.barcode,
-                                imagePath = firstImage,
-                                onClick = { onNavigateToEditProduct(product.id) }
-                            )
-                        }
                     }
+                }
+                FloatingActionButton(
+                    onClick = onNavigateToAddProduct,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = stringResource(R.string.add_product)
+                    )
                 }
             }
         }
+
     }
 }
 
@@ -208,7 +277,7 @@ fun EmptyStockState(onAddClick: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(24.dp))
         Button(onClick = onAddClick) {
-            Icon(Icons.Default.Add, contentDescription = null)
+            Icon(Icons.Default.Add, null)
             Spacer(modifier = Modifier.width(8.dp))
             Text("Add your first item")
         }
@@ -223,25 +292,15 @@ fun StockItemCard(
     price: Double,
     barcode: String,
     imagePath: String?,
+    minStock: Int,
     onClick: () -> Unit
 ) {
-    val isLowStock = qty < 5
-    val quantityColor = if (isLowStock) {
-        MaterialTheme.colorScheme.errorContainer
-    } else {
-        MaterialTheme.colorScheme.secondaryContainer
-    }
-    val onQuantityColor = if (isLowStock) {
-        MaterialTheme.colorScheme.onErrorContainer
-    } else {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    }
-
+    val isLowStock = qty <= minStock && minStock > 0
     Card(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding( vertical = 4.dp),
+            .padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         )
@@ -252,7 +311,6 @@ fun StockItemCard(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Product Image
             Box(
                 modifier = Modifier
                     .size(64.dp)
@@ -277,9 +335,7 @@ fun StockItemCard(
                     )
                 }
             }
-
             Spacer(modifier = Modifier.width(16.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -299,9 +355,7 @@ fun StockItemCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
-
                 Spacer(modifier = Modifier.height(4.dp))
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -320,16 +374,15 @@ fun StockItemCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = quantityColor
+                        color = if (isLowStock) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer
                     ) {
                         Text(
                             text = "Qty: $qty",
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelMedium,
-                            color = onQuantityColor,
+                            color = if (isLowStock) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer,
                             fontWeight = if (isLowStock) FontWeight.Bold else FontWeight.Normal
                         )
                     }

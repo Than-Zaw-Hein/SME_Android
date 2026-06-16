@@ -29,7 +29,8 @@ import java.util.concurrent.Executors
 @Composable
 fun BarcodeScannerView(
     onBarcodeScanned: (String) -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -63,7 +64,7 @@ fun BarcodeScannerView(
 
     if (cameraProvider != null) {
         Box(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxSize()
                 .background(Color.Black)
         ) {

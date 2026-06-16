@@ -24,6 +24,8 @@ class FileRepositoryImpl @Inject constructor(
     override suspend fun uploadProductImage(
         uri: Uri,
         productId: String,
+        productName: String,
+        shopName: String,
         fileName: String
     ): Result<String> {
         return try {
@@ -50,9 +52,19 @@ class FileRepositoryImpl @Inject constructor(
         return Result.success(Unit)
     }
 
-    override suspend fun deleteProductImagesFolder(productId: String): Result<Unit> {
+    override suspend fun deleteProductImagesFolder(productId: String, productName: String, shopName: String): Result<Unit> {
         return Result.success(Unit)
     }
+
+    override suspend fun registerImage(
+        url: String,
+        path: String,
+        relatedEntityId: String,
+        shopId: String
+    ): Result<Unit> {
+        return Result.success(Unit)
+    }
+
 
     private fun processImage(uri: Uri): ByteArray? {
         return try {

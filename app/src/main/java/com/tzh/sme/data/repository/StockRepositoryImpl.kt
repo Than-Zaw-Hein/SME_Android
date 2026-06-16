@@ -52,7 +52,7 @@ class StockRepositoryImpl @Inject constructor(
     override fun getAllCategories(): Flow<List<CategoryModel>> =
         categoryRepository.getAllCategories()
 
-    override suspend fun addCategory(category: CategoryModel) =
+    override suspend fun addCategory(category: CategoryModel) : CategoryModel? =
         categoryRepository.addCategory(category)
 
     override suspend fun deleteCategory(category: CategoryModel) =
@@ -61,53 +61,4 @@ class StockRepositoryImpl @Inject constructor(
     override fun generateNextId(): String = productRepository.generateNextId()
 
     override suspend fun syncFromFirestore(): Result<Unit> = Result.success(Unit)
-
-
-//    suspend fun updateDocumentId(oldId: String, newId: String): Result<Unit> {
-//        return try {
-//
-//            // 2. Define the subcollections that need to move
-//            val subcollections = listOf("products", "categories", "transactions")
-//
-//            // 4. Migrate each subcollection's documents
-//            for (subName in subcollections) {
-//                migrateSubcollection(oldId, newId, subName)
-//            }
-//
-//            Log.d("Migration", "Successfully migrated user $oldId and all subcollections to $newId")
-//            Result.success(Unit)
-//        } catch (e: Exception) {
-//            Log.e("Migration", "Error during migration: ${e.message}")
-//            Result.failure(e)
-//        }
-//    }
-//
-//    private suspend fun migrateSubcollection(
-//        oldUserId: String,
-//        newUserId: String,
-//        collectionName: String
-//    ) {
-//        val oldCollection =
-//            firestore.collection("users").document(oldUserId).collection(collectionName)
-//        val newCollection =
-//            firestore.collection("users").document(newUserId).collection(collectionName)
-//
-//        val snapshot = oldCollection.get().await()
-//        if (snapshot.isEmpty) return
-//        Log.e("Migration", "Migrating $collectionName")
-//        Log.e("ASDASDASDASD", snapshot.documents.toString())
-//        // Firestore batches have a limit of 500 operations
-//        val batches = snapshot.documents.chunked(500)
-//        for (chunk in batches) {
-//            firestore.runBatch { batch ->
-//                for (doc in chunk) {
-//                    val data = doc.data ?: continue
-//                    // Create document with the same ID at the new path
-//                    batch.set(newCollection.document(doc.id), data)
-//                    // Delete the document from the old path
-//                    batch.delete(doc.reference)
-//                }
-//            }.await()
-//        }
-//    }
 }

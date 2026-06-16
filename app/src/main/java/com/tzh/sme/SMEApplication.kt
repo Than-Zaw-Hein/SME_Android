@@ -7,6 +7,7 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.util.Logger
+import com.google.android.gms.security.ProviderInstaller
 import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.appCheck
@@ -19,21 +20,22 @@ class SMEApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
 
-//        // Initialize ProviderInstaller to ensure secure communication and fix GMS issues
-//        try {
-//            ProviderInstaller.installIfNeeded(this)
-//        } catch (e: Exception) {
-//            Log.e("SMEApplication", "Google Play Services security provider installation failed", e)
-//        }
+        // Initialize ProviderInstaller to ensure secure communication and fix GMS issues
+        try {
+            ProviderInstaller.installIfNeeded(this)
+        } catch (e: Exception) {
+            Log.e("SMEApplication", "Google Play Services security provider installation failed", e)
+        }
 
         FirebaseApp.initializeApp(this)
         val firebaseAppCheck = Firebase.appCheck
 
         if (BuildConfig.DEBUG) {
-            // Your debug token: C91B00E1-E341-4E8C-8D04-767E6881211F
+            // Install the debug provider before fetching any tokens
             firebaseAppCheck.installAppCheckProviderFactory(
                 DebugAppCheckProviderFactory.getInstance()
             )
+            Log.d("SMEApplication", "Firebase App Check Debug Provider installed")
         } else {
             firebaseAppCheck.installAppCheckProviderFactory(
                 PlayIntegrityAppCheckProviderFactory.getInstance()

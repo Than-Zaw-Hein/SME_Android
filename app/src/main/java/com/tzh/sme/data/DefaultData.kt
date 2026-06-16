@@ -4,7 +4,7 @@ import com.tzh.sme.data.model.CategoryModel
 
 object DefaultData {
     val defaultCategory = CategoryModel(
-        id = "defaultId0",
+        id = "__all__",
         name = "All",
         icon = "📦"
     )

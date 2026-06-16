@@ -1,17 +1,14 @@
 package com.tzh.sme.data.repository
 
 import android.util.Log
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.tzh.sme.data.model.ProductModel
+import com.tzh.sme.domain.repository.AuthRepository
 import com.tzh.sme.domain.repository.CategoryRepository
 import com.tzh.sme.domain.repository.ProductRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,31 +17,24 @@ import javax.inject.Singleton
 @Singleton
 class ProductRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val auth: FirebaseAuth,
+    private val authRepository: AuthRepository,
     private val categoryRepository: CategoryRepository
 ) : ProductRepository {
 
-    private fun getProductsCollection(userId: String) = firestore
-        .collection("users")
-        .document(userId)
+    private fun getProductsCollection(shopId: String) = firestore
+        .collection("shops")
+        .document(shopId)
         .collection("products")
 
-    private fun getAuthStateFlow(): Flow<String?> = callbackFlow {
-        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
-            trySend(firebaseAuth.currentUser?.uid)
-        }
-        auth.addAuthStateListener(listener)
-        awaitClose { auth.removeAuthStateListener(listener) }
-    }
-
     override fun getAllProducts(): Flow<List<ProductModel>> =
-        getAuthStateFlow().flatMapLatest { uid ->
-            if (uid == null) {
+        authRepository.currentUser.flatMapLatest { user ->
+            val shopId = user?.shopId ?: user?.id
+            if (shopId == null) {
                 flowOf(emptyList())
             } else {
                 callbackFlow {
                     val subscription =
-                        getProductsCollection(uid).addSnapshotListener { snapshot, error ->
+                        getProductsCollection(shopId).addSnapshotListener { snapshot, error ->
                             if (error != null) {
                                 Log.w("ProductRepository", "Listen failed: $error")
                                 return@addSnapshotListener
@@ -60,13 +50,14 @@ class ProductRepositoryImpl @Inject constructor(
         }
 
     override fun searchProducts(query: String): Flow<List<ProductModel>> =
-        getAuthStateFlow().flatMapLatest { uid ->
-            if (uid == null) {
+        authRepository.currentUser.flatMapLatest { user ->
+            val shopId = user?.shopId ?: user?.id
+            if (shopId == null) {
                 flowOf(emptyList())
             } else {
                 callbackFlow {
                     val subscription =
-                        getProductsCollection(uid).addSnapshotListener { snapshot, error ->
+                        getProductsCollection(shopId).addSnapshotListener { snapshot, error ->
                             if (error != null) {
                                 Log.w("ProductRepository", "Listen failed: $error")
                                 return@addSnapshotListener
@@ -88,9 +79,10 @@ class ProductRepositoryImpl @Inject constructor(
         }
 
     override suspend fun getProductByBarcode(barcode: String): ProductModel? {
-        val uid = auth.currentUser?.uid ?: return null
+        val currentUser = authRepository.currentUser.value
+        val shopId = currentUser?.shopId ?: currentUser?.id ?: return null
         return try {
-            val snapshot = getProductsCollection(uid)
+            val snapshot = getProductsCollection(shopId)
                 .whereEqualTo("barcode", barcode)
                 .get()
                 .await()
@@ -102,9 +94,10 @@ class ProductRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getProductById(id: String): ProductModel? {
-        val uid = auth.currentUser?.uid ?: return null
+        val currentUser = authRepository.currentUser.value
+        val shopId = currentUser?.shopId ?: currentUser?.id ?: return null
         return try {
-            val snapshot = getProductsCollection(uid).document(id).get().await()
+            val snapshot = getProductsCollection(shopId).document(id).get().await()
             snapshot.toObject(ProductModel::class.java)
         } catch (e: Exception) {
             Log.e("ProductRepository", "Error getting product by id", e)
@@ -113,9 +106,10 @@ class ProductRepositoryImpl @Inject constructor(
     }
 
     override suspend fun addOrUpdateProduct(product: ProductModel) {
-        val uid = auth.currentUser?.uid ?: return
+        val currentUser = authRepository.currentUser.value
+        val shopId = currentUser?.shopId ?: currentUser?.id ?: return
         try {
-            val collection = getProductsCollection(uid)
+            val collection = getProductsCollection(shopId)
             val docRef = if (product.id.isEmpty()) {
                 collection.document()
             } else {
@@ -130,16 +124,18 @@ class ProductRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteProduct(product: ProductModel) {
-        val uid = auth.currentUser?.uid ?: return
+        val currentUser = authRepository.currentUser.value
+        val shopId = currentUser?.shopId ?: currentUser?.id ?: return
         try {
-            getProductsCollection(uid).document(product.id).delete().await()
+            getProductsCollection(shopId).document(product.id).delete().await()
         } catch (e: Exception) {
             Log.e("ProductRepository", "Error deleting product", e)
         }
     }
 
     override fun generateNextId(): String {
-        val uid = auth.currentUser?.uid ?: return ""
-        return getProductsCollection(uid).document().id
+        val currentUser = authRepository.currentUser.value
+        val shopId = currentUser?.shopId ?: currentUser?.id ?: return ""
+        return getProductsCollection(shopId).document().id
     }
 }
